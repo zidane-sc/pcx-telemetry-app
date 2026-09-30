@@ -2,6 +2,7 @@ package com.zidane.pcx_telemetry_app
 
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -11,6 +12,12 @@ class MainActivity: FlutterActivity(), TextToSpeech.OnInitListener {
     private val CHANNEL = "com.zidane.pcx_telemetry_app/tts"
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Keep screen alive 100% while app is running on motorcycle cockpit
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
