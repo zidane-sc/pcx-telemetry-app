@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/models/telemetry_data.dart';
 import '../../core/bluetooth/obd_service.dart';
@@ -9,6 +11,9 @@ import '../../core/trip/trip_manager.dart';
 import '../../core/sync/pocketbase_service.dart';
 import '../../core/pip/pip_manager.dart';
 import '../../core/audio/voice_alert_service.dart';
+import '../../core/navigation/navigation_manager.dart';
+import '../navigation/search_destination_sheet.dart';
+import '../navigation/navigation_turn_banner.dart';
 
 class CockpitScreen extends StatefulWidget {
   final ObdService obdService;
@@ -37,6 +42,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
   Timer? _countdownTimer;
   int _countdownSeconds = 5;
 
+  // Navigation UI State
+  bool _isInlineMapVisible = true;
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +71,15 @@ class _CockpitScreenState extends State<CockpitScreen> {
       // Check auto-start trip trigger when vehicle starts moving
       _checkAutoStartTrigger(sensorData.gpsSpeedKmh);
 
+      // Feed GPS to NavigationManager if active
+      if (NavigationManager().isNavigating) {
+        NavigationManager().updateLocation(
+          lat: sensorData.latitude,
+          lng: sensorData.longitude,
+          speedKmh: sensorData.gpsSpeedKmh,
+        );
+      }
+
       // Feed data to TripManager if trip recording is active
       if (TripManager().isRecording) {
         TripManager().onTelemetryUpdate(
@@ -75,9 +92,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
     });
 
     TripManager().addListener(_onTripStateChanged);
+    NavigationManager().addListener(_onNavStateChanged);
   }
 
   void _onTripStateChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onNavStateChanged() {
     if (mounted) setState(() {});
   }
 
@@ -85,6 +107,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
   void dispose() {
     _countdownTimer?.cancel();
     TripManager().removeListener(_onTripStateChanged);
+    NavigationManager().removeListener(_onNavStateChanged);
     super.dispose();
   }
 
@@ -610,6 +633,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
     final String speedUnit = isObdLive ? 'KM / H' : 'KM / H (GPS)';
     final tripMgr = TripManager();
+    final navMgr = NavigationManager();
     final bool isRecording = tripMgr.isRecording;
     final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
     final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
@@ -619,7 +643,87 @@ class _CockpitScreenState extends State<CockpitScreen> {
       child: Column(
         children: [
           _buildTopStatusBar(),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
+
+          // Turn-by-Turn Navigation Instruction Banner
+          NavigationTurnBanner(
+            navMgr: navMgr,
+            onToggleMap: () =>
+                setState(() => _isInlineMapVisible = !_isInlineMapVisible),
+            isMapVisible: _isInlineMapVisible,
+          ),
+
+          // If Navigating & Map Visible: Show Cockpit Live Route Map
+          if (navMgr.isNavigating &&
+              _isInlineMapVisible &&
+              navMgr.currentRoute != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox(
+                  height: 190,
+                  width: double.infinity,
+                  child: FlutterMap(
+                    options: MapOptions(
+                      initialCenter: LatLng(
+                        _currentSensor.latitude != 0.0
+                            ? _currentSensor.latitude
+                            : -6.2088,
+                        _currentSensor.longitude != 0.0
+                            ? _currentSensor.longitude
+                            : 106.8456,
+                      ),
+                      initialZoom: 16.0,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                        fallbackUrl:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.zidane.pcx_telemetry_app',
+                      ),
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: navMgr.currentRoute!.polyline,
+                            strokeWidth: 4.5,
+                            color: const Color(0xFF00E5FF),
+                          ),
+                        ],
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: LatLng(_currentSensor.latitude,
+                                _currentSensor.longitude),
+                            width: 24,
+                            height: 24,
+                            child: const Icon(
+                              Icons.navigation,
+                              color: Color(0xFF00FF66),
+                              size: 22,
+                            ),
+                          ),
+                          if (navMgr.destination != null)
+                            Marker(
+                              point: navMgr.destination!.toLatLng,
+                              width: 24,
+                              height: 24,
+                              child: const Icon(
+                                Icons.flag_circle,
+                                color: Colors.redAccent,
+                                size: 22,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
           // Giant Speed Display
           Center(
@@ -678,6 +782,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
     final String speedUnit = isObdLive ? 'KM / H' : 'KM / H (GPS)';
     final tripMgr = TripManager();
+    final navMgr = NavigationManager();
     final bool isRecording = tripMgr.isRecording;
     final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
     final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
@@ -744,22 +849,95 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
           const SizedBox(width: 12),
 
-          // Right Pane: Top Status Bar + 2x2 Compact Grid (58% width)
+          // Right Pane: Top Status Bar + (Map or 2x2 Compact Grid) (58% width)
           Expanded(
             flex: 58,
             child: Column(
               children: [
                 _buildTopStatusBar(),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
+
+                // Navigation Banner in Landscape
+                NavigationTurnBanner(
+                  navMgr: navMgr,
+                  onToggleMap: () => setState(
+                      () => _isInlineMapVisible = !_isInlineMapVisible),
+                  isMapVisible: _isInlineMapVisible,
+                ),
+
                 Expanded(
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 2.0,
-                    children: _buildMetricCards(
-                        isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
-                  ),
+                  child: navMgr.isNavigating &&
+                          _isInlineMapVisible &&
+                          navMgr.currentRoute != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: FlutterMap(
+                            options: MapOptions(
+                              initialCenter: LatLng(
+                                _currentSensor.latitude != 0.0
+                                    ? _currentSensor.latitude
+                                    : -6.2088,
+                                _currentSensor.longitude != 0.0
+                                    ? _currentSensor.longitude
+                                    : 106.8456,
+                              ),
+                              initialZoom: 16.0,
+                            ),
+                            children: [
+                              TileLayer(
+                                urlTemplate:
+                                    'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                                fallbackUrl:
+                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName:
+                                    'com.zidane.pcx_telemetry_app',
+                              ),
+                              PolylineLayer(
+                                polylines: [
+                                  Polyline(
+                                    points: navMgr.currentRoute!.polyline,
+                                    strokeWidth: 4.5,
+                                    color: const Color(0xFF00E5FF),
+                                  ),
+                                ],
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: LatLng(_currentSensor.latitude,
+                                        _currentSensor.longitude),
+                                    width: 24,
+                                    height: 24,
+                                    child: const Icon(
+                                      Icons.navigation,
+                                      color: Color(0xFF00FF66),
+                                      size: 22,
+                                    ),
+                                  ),
+                                  if (navMgr.destination != null)
+                                    Marker(
+                                      point: navMgr.destination!.toLatLng,
+                                      width: 24,
+                                      height: 24,
+                                      child: const Icon(
+                                        Icons.flag_circle,
+                                        color: Colors.redAccent,
+                                        size: 22,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                      : GridView.count(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 2.0,
+                          children: _buildMetricCards(isRecording, isObdLive,
+                              tripMgr, isOverheat, isLowBatt),
+                        ),
                 ),
               ],
             ),
@@ -820,6 +998,29 @@ class _CockpitScreenState extends State<CockpitScreen> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Destination Search Button
+            IconButton(
+              icon: const Icon(Icons.search,
+                  color: Color(0xFF00FF66), size: 17),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              tooltip: 'Cari Tujuan Navigasi (OSRM)',
+              onPressed: () {
+                SearchDestinationSheet.show(
+                  context,
+                  LatLng(
+                    _currentSensor.latitude != 0.0
+                        ? _currentSensor.latitude
+                        : -6.2088,
+                    _currentSensor.longitude != 0.0
+                        ? _currentSensor.longitude
+                        : 106.8456,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 2),
+
             // Cloud Sync Indicator
             ValueListenableBuilder<bool>(
               valueListenable: widget.pbService.isConnectedNotifier,
@@ -869,7 +1070,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 );
               },
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
 
             // Native PiP Button (Floating over Google Maps)
             IconButton(
@@ -894,14 +1095,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
               tooltip: 'Scan OBD Bluetooth',
               onPressed: _showBluetoothPicker,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
 
             // Simulation Toggle Pill
             TextButton(
               style: TextButton.styleFrom(
                 backgroundColor: Colors.white.withOpacity(0.08),
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                minimumSize: const Size(36, 22),
+                minimumSize: const Size(34, 22),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               onPressed: () {
@@ -931,7 +1132,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
               ? Colors.redAccent.withOpacity(0.9)
               : const Color(0xFF00FF66).withOpacity(0.9),
           foregroundColor: Colors.black,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         onPressed: _toggleTripRecording,
         icon: Icon(isRecording ? Icons.stop_circle : Icons.navigation),
