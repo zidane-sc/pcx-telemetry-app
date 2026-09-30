@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../core/trip/trip_manager.dart';
 
 class TripsScreen extends StatefulWidget {
@@ -29,10 +31,23 @@ class _TripsScreenState extends State<TripsScreen> {
   }
 
   void _showTimelineDetails(TripRecord item) {
-    List<dynamic> points = [];
+    List<dynamic> rawPoints = [];
     try {
-      points = jsonDecode(item.timelineData);
+      rawPoints = jsonDecode(item.timelineData);
     } catch (_) {}
+
+    final List<LatLng> mapPoints = [];
+    for (final p in rawPoints) {
+      final lat = (p['lat'] as num?)?.toDouble() ?? 0.0;
+      final lng = (p['lng'] as num?)?.toDouble() ?? 0.0;
+      if (lat != 0.0 && lng != 0.0) {
+        mapPoints.add(LatLng(lat, lng));
+      }
+    }
+
+    final LatLng centerPoint = mapPoints.isNotEmpty
+        ? mapPoints[mapPoints.length ~/ 2]
+        : const LatLng(-6.2088, 106.8456); // Jakarta fallback
 
     showModalBottomSheet(
       context: context,
@@ -42,9 +57,9 @@ class _TripsScreenState extends State<TripsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.65,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
         expand: false,
         builder: (context, scrollController) => Padding(
           padding: const EdgeInsets.all(16.0),
@@ -58,7 +73,7 @@ class _TripsScreenState extends State<TripsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'TIMELINE & TELEMETRI RUTE',
+                        'PETA RUTE & TIMELINE TELEMETRI',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -68,7 +83,7 @@ class _TripsScreenState extends State<TripsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${points.length} Titik GPS Tersimpan (1 Hz / 1 detik)',
+                        '${mapPoints.length} Titik GPS Tersimpan (1 Hz)',
                         style: const TextStyle(color: Color(0xFF00FF66), fontSize: 11),
                       ),
                     ],
@@ -79,7 +94,77 @@ class _TripsScreenState extends State<TripsScreen> {
                   ),
                 ],
               ),
-              const Divider(color: Colors.white12, height: 16),
+              const SizedBox(height: 10),
+
+              // Interactive Route Map
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox(
+                  height: 220,
+                  width: double.infinity,
+                  child: mapPoints.isEmpty
+                      ? Container(
+                          color: Colors.black26,
+                          child: const Center(
+                            child: Text(
+                              'Koordinat GPS belum terekam pada trip ini.',
+                              style: TextStyle(color: Colors.white38, fontSize: 12),
+                            ),
+                          ),
+                        )
+                      : FlutterMap(
+                          options: MapOptions(
+                            initialCenter: centerPoint,
+                            initialZoom: 15.0,
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate:
+                                  'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                              fallbackUrl:
+                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              userAgentPackageName:
+                                  'com.zidane.pcx_telemetry_app',
+                            ),
+                            PolylineLayer(
+                              polylines: [
+                                Polyline(
+                                  points: mapPoints,
+                                  strokeWidth: 4.5,
+                                  color: const Color(0xFF00E5FF),
+                                ),
+                              ],
+                            ),
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: mapPoints.first,
+                                  width: 24,
+                                  height: 24,
+                                  child: const Icon(
+                                    Icons.play_circle_fill,
+                                    color: Color(0xFF00FF66),
+                                    size: 22,
+                                  ),
+                                ),
+                                Marker(
+                                  point: mapPoints.last,
+                                  width: 24,
+                                  height: 24,
+                                  child: const Icon(
+                                    Icons.flag_circle,
+                                    color: Colors.redAccent,
+                                    size: 22,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -89,14 +174,14 @@ class _TripsScreenState extends State<TripsScreen> {
                   _buildDetailMiniCard('Rebah L/R', '${item.maxLeanLeftDeg.toStringAsFixed(0)}° / ${item.maxLeanRightDeg.toStringAsFixed(0)}°'),
                 ],
               ),
-              const SizedBox(height: 12),
+              const Divider(color: Colors.white12, height: 16),
               const Text(
                 'LOG DETIK PER DETIK (GPS & REBAH):',
                 style: TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
               Expanded(
-                child: points.isEmpty
+                child: rawPoints.isEmpty
                     ? const Center(
                         child: Text(
                           'Timeline belum tersedia untuk trip ini.',
@@ -105,9 +190,9 @@ class _TripsScreenState extends State<TripsScreen> {
                       )
                     : ListView.builder(
                         controller: scrollController,
-                        itemCount: points.length,
+                        itemCount: rawPoints.length,
                         itemBuilder: (context, idx) {
-                          final p = points[idx] as Map<String, dynamic>;
+                          final p = rawPoints[idx] as Map<String, dynamic>;
                           final sec = p['t'] ?? idx;
                           final spd = p['spd'] ?? 0;
                           final lean = p['lean'] ?? 0;
@@ -300,7 +385,7 @@ class _TripsScreenState extends State<TripsScreen> {
                               ),
                             ),
                             Text(
-                              'Tap untuk timeline rute ➔',
+                              'Tap untuk rute & timeline ➔',
                               style: TextStyle(
                                 color: const Color(0xFF00E5FF).withOpacity(0.7),
                                 fontSize: 10,

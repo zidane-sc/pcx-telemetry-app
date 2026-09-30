@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -7,6 +8,7 @@ import '../../core/sensors/sensor_hub.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/sync/pocketbase_service.dart';
 import '../../core/pip/pip_manager.dart';
+import '../../core/audio/voice_alert_service.dart';
 
 class CockpitScreen extends StatefulWidget {
   final ObdService obdService;
@@ -28,6 +30,12 @@ class _CockpitScreenState extends State<CockpitScreen> {
   TelemetryFrame _currentFrame = TelemetryFrame.empty();
   SensorHubData _currentSensor = SensorHubData.empty();
   String? _connectedDeviceName;
+
+  // Auto-Start Trip Countdown State
+  bool _isAutoStartDialogShowing = false;
+  DateTime? _autoStartCooldownUntil;
+  Timer? _countdownTimer;
+  int _countdownSeconds = 5;
 
   @override
   void initState() {
@@ -52,6 +60,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
         });
       }
 
+      // Check auto-start trip trigger when vehicle starts moving
+      _checkAutoStartTrigger(sensorData.gpsSpeedKmh);
+
       // Feed data to TripManager if trip recording is active
       if (TripManager().isRecording) {
         TripManager().onTelemetryUpdate(
@@ -72,8 +83,147 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     TripManager().removeListener(_onTripStateChanged);
     super.dispose();
+  }
+
+  void _checkAutoStartTrigger(double speedKmh) {
+    if (TripManager().isRecording) return;
+    if (_isAutoStartDialogShowing) return;
+    if (_autoStartCooldownUntil != null &&
+        DateTime.now().isBefore(_autoStartCooldownUntil!)) {
+      return;
+    }
+
+    // Trigger auto-start if moving > 14 km/h
+    if (speedKmh > 14.0) {
+      _triggerAutoStartCountdown(speedKmh);
+    }
+  }
+
+  void _triggerAutoStartCountdown(double speedKmh) {
+    _isAutoStartDialogShowing = true;
+    _countdownSeconds = 5;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            _countdownTimer?.cancel();
+            _countdownTimer =
+                Timer.periodic(const Duration(seconds: 1), (timer) {
+              if (_countdownSeconds > 1) {
+                setDialogState(() {
+                  _countdownSeconds--;
+                });
+              } else {
+                timer.cancel();
+                if (Navigator.canPop(ctx)) Navigator.pop(ctx);
+                _isAutoStartDialogShowing = false;
+                _toggleTripRecording();
+                VoiceAlertService().speakAlert("Trip otomatis dimulai!");
+              }
+            });
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF131B2E),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: const [
+                  Icon(Icons.directions_bike,
+                      color: Color(0xFF00FF66), size: 28),
+                  SizedBox(width: 10),
+                  Text(
+                    'GERAKAN TERDETEKSI',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Kecepatan ${speedKmh.toStringAsFixed(0)} km/h terdeteksi.\nMemulai rekam trip dalam:',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 64,
+                        height: 64,
+                        child: CircularProgressIndicator(
+                          value: _countdownSeconds / 5.0,
+                          strokeWidth: 5,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF00FF66)),
+                          backgroundColor: Colors.white10,
+                        ),
+                      ),
+                      Text(
+                        '$_countdownSeconds',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.redAccent.withOpacity(0.15),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      _countdownTimer?.cancel();
+                      Navigator.pop(ctx);
+                      _isAutoStartDialogShowing = false;
+                      _autoStartCooldownUntil =
+                          DateTime.now().add(const Duration(seconds: 90));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text(
+                                'Auto-start trip dibatalkan (jeda 90 detik).')),
+                      );
+                    },
+                    child: const Text(
+                      'BATALKAN (BUKAN RIDING)',
+                      style: TextStyle(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((_) {
+      _countdownTimer?.cancel();
+      _isAutoStartDialogShowing = false;
+    });
   }
 
   void _toggleTripRecording() async {
@@ -83,7 +233,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFF00FF66),
-          content: Text('Trip Recording Dimulai! Pantau GPS, Speed & Lean Angle.'),
+          content:
+              Text('Trip Recording Dimulai! Pantau GPS, Speed & Lean Angle.'),
         ),
       );
     } else {
@@ -101,7 +252,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.orangeAccent,
-          content: Text('Mode Picture-in-Picture (PiP) tidak didukung pada HP ini.'),
+          content:
+              Text('Mode Picture-in-Picture (PiP) tidak didukung pada HP ini.'),
         ),
       );
       return;
@@ -143,15 +295,21 @@ class _CockpitScreenState extends State<CockpitScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDialogRow('Jarak Tempuh', '${record.distanceKm.toStringAsFixed(2)} KM'),
-            _buildDialogRow('Durasi', '${record.durationMin.toStringAsFixed(1)} Menit'),
-            _buildDialogRow('Top Speed', '${record.maxSpeedKmh.toStringAsFixed(1)} KM/H'),
-            _buildDialogRow('Rata-rata Speed', '${record.avgSpeedKmh.toStringAsFixed(1)} KM/H'),
+            _buildDialogRow(
+                'Jarak Tempuh', '${record.distanceKm.toStringAsFixed(2)} KM'),
+            _buildDialogRow(
+                'Durasi', '${record.durationMin.toStringAsFixed(1)} Menit'),
+            _buildDialogRow(
+                'Top Speed', '${record.maxSpeedKmh.toStringAsFixed(1)} KM/H'),
+            _buildDialogRow('Rata-rata Speed',
+                '${record.avgSpeedKmh.toStringAsFixed(1)} KM/H'),
             _buildDialogRow('Peak Rebah (Kiri/Kanan)',
                 'L ${record.maxLeanLeftDeg.toStringAsFixed(0)}° / R ${record.maxLeanRightDeg.toStringAsFixed(0)}°'),
             _buildDialogRow('Rem Mendadak', '${record.hardBrakingCount} Kali'),
-            _buildDialogRow('Estimasi Bensin', '${record.fuelConsumedL.toStringAsFixed(2)} L'),
-            _buildDialogRow('Biaya BBM', 'Rp ${record.tripCostIdr.toStringAsFixed(0)}'),
+            _buildDialogRow(
+                'Estimasi Bensin', '${record.fuelConsumedL.toStringAsFixed(2)} L'),
+            _buildDialogRow(
+                'Biaya BBM', 'Rp ${record.tripCostIdr.toStringAsFixed(0)}'),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(8),
@@ -177,7 +335,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('TUTUP', style: TextStyle(color: Color(0xFF00E5FF))),
+            child:
+                const Text('TUTUP', style: TextStyle(color: Color(0xFF00E5FF))),
           ),
         ],
       ),
@@ -190,8 +349,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white60, fontSize: 12)),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+          Text(label,
+              style: const TextStyle(color: Colors.white60, fontSize: 12)),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13)),
         ],
       ),
     );
@@ -199,19 +363,20 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
   void _showBluetoothPicker() async {
     try {
-      // 1. Explicitly request Android 12+ runtime permissions
       final statuses = await [
         Permission.bluetoothConnect,
         Permission.bluetoothScan,
         Permission.location,
       ].request();
 
-      if (statuses[Permission.bluetoothConnect] == PermissionStatus.permanentlyDenied) {
+      if (statuses[Permission.bluetoothConnect] ==
+          PermissionStatus.permanentlyDenied) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.redAccent,
-            content: const Text('Izin Bluetooth ditolak permanen. Buka Pengaturan HP untuk mengizinkan.'),
+            content: const Text(
+                'Izin Bluetooth ditolak permanen. Buka Pengaturan HP untuk mengizinkan.'),
             action: SnackBarAction(
               label: 'PENGATURAN',
               textColor: Colors.white,
@@ -227,13 +392,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Colors.orangeAccent,
-            content: Text('Izin Bluetooth Connect dibutuhkan untuk scan perangkat.'),
+            content:
+                Text('Izin Bluetooth Connect dibutuhkan untuk scan perangkat.'),
           ),
         );
         return;
       }
 
-      // 2. Fetch bonded devices cleanly
       final List<BluetoothDevice> devices =
           await FlutterBluetoothSerial.instance.getBondedDevices();
 
@@ -266,7 +431,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                        icon: const Icon(Icons.close,
+                            color: Colors.white54, size: 20),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -290,29 +456,36 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         itemCount: devices.length,
                         itemBuilder: (context, index) {
                           final dev = devices[index];
-                          final bool isObd = (dev.name ?? '').toLowerCase().contains('obd');
+                          final bool isObd =
+                              (dev.name ?? '').toLowerCase().contains('obd');
 
                           return ListTile(
                             leading: Icon(
                               Icons.bluetooth,
-                              color: isObd ? const Color(0xFF00FF66) : const Color(0xFF00E5FF),
+                              color: isObd
+                                  ? const Color(0xFF00FF66)
+                                  : const Color(0xFF00E5FF),
                             ),
                             title: Text(
                               dev.name ?? 'Unknown Device',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontWeight: isObd ? FontWeight.bold : FontWeight.normal,
+                                fontWeight:
+                                    isObd ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
                             subtitle: Text(
                               dev.address,
-                              style: const TextStyle(color: Colors.white54, fontSize: 11),
+                              style: const TextStyle(
+                                  color: Colors.white54, fontSize: 11),
                             ),
                             trailing: isObd
                                 ? Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF00FF66).withOpacity(0.2),
+                                      color: const Color(0xFF00FF66)
+                                          .withOpacity(0.2),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: const Text(
@@ -379,7 +552,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
     if (widget.obdService.isMockMode) return 'SIMULATOR ACTIVE';
     switch (widget.obdService.state) {
       case ObdConnectionState.connected:
-        return _connectedDeviceName != null ? 'LIVE: $_connectedDeviceName' : 'OBD-2 CONNECTED';
+        return _connectedDeviceName != null
+            ? 'LIVE: $_connectedDeviceName'
+            : 'OBD-2 CONNECTED';
       case ObdConnectionState.connecting:
         return 'CONNECTING...';
       case ObdConnectionState.handshaking:
@@ -426,18 +601,18 @@ class _CockpitScreenState extends State<CockpitScreen> {
   }
 
   Widget _buildPortraitLayout() {
-    final bool isObdLive = widget.obdService.state == ObdConnectionState.connected ||
-        widget.obdService.isMockMode;
+    final bool isObdLive =
+        widget.obdService.state == ObdConnectionState.connected ||
+            widget.obdService.isMockMode;
 
-    final double displaySpeed = isObdLive
-        ? _currentFrame.speedKmh
-        : _currentSensor.gpsSpeedKmh;
+    final double displaySpeed =
+        isObdLive ? _currentFrame.speedKmh : _currentSensor.gpsSpeedKmh;
 
     final String speedUnit = isObdLive ? 'KM / H' : 'KM / H (GPS)';
     final tripMgr = TripManager();
     final bool isRecording = tripMgr.isRecording;
-    final bool isOverheat = _currentFrame.ectC > 100.0;
-    final bool isLowBatt = _currentFrame.batteryVoltage < 11.8;
+    final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
+    final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
@@ -484,7 +659,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
               childAspectRatio: 1.45,
-              children: _buildMetricCards(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
+              children: _buildMetricCards(
+                  isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
             ),
           ),
         ],
@@ -493,18 +669,18 @@ class _CockpitScreenState extends State<CockpitScreen> {
   }
 
   Widget _buildLandscapeLayout() {
-    final bool isObdLive = widget.obdService.state == ObdConnectionState.connected ||
-        widget.obdService.isMockMode;
+    final bool isObdLive =
+        widget.obdService.state == ObdConnectionState.connected ||
+            widget.obdService.isMockMode;
 
-    final double displaySpeed = isObdLive
-        ? _currentFrame.speedKmh
-        : _currentSensor.gpsSpeedKmh;
+    final double displaySpeed =
+        isObdLive ? _currentFrame.speedKmh : _currentSensor.gpsSpeedKmh;
 
     final String speedUnit = isObdLive ? 'KM / H' : 'KM / H (GPS)';
     final tripMgr = TripManager();
     final bool isRecording = tripMgr.isRecording;
-    final bool isOverheat = _currentFrame.ectC > 100.0;
-    final bool isLowBatt = _currentFrame.batteryVoltage < 11.8;
+    final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
+    final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
@@ -546,15 +722,19 @@ class _CockpitScreenState extends State<CockpitScreen> {
                           : const Color(0xFF00FF66).withOpacity(0.9),
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: _toggleTripRecording,
-                    icon: Icon(isRecording ? Icons.stop_circle : Icons.navigation, size: 16),
+                    icon: Icon(
+                        isRecording ? Icons.stop_circle : Icons.navigation,
+                        size: 16),
                     label: Text(
                       isRecording
                           ? 'FINISH (${tripMgr.distanceKm.toStringAsFixed(1)} KM)'
                           : 'START TRIP',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 11),
                     ),
                   ),
                 ),
@@ -577,7 +757,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                     childAspectRatio: 2.0,
-                    children: _buildMetricCards(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
+                    children: _buildMetricCards(
+                        isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
                   ),
                 ),
               ],
@@ -625,7 +806,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     ),
                   ),
                   const SizedBox(width: 2),
-                  const Icon(Icons.arrow_drop_down, color: Colors.white54, size: 16),
+                  const Icon(Icons.arrow_drop_down,
+                      color: Colors.white54, size: 16),
                 ],
               ),
             ),
@@ -648,7 +830,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   },
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
                       color: isConnected
                           ? const Color(0xFF00FF66).withOpacity(0.12)
@@ -704,7 +887,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
             // Bluetooth Scan Button
             IconButton(
-              icon: const Icon(Icons.bluetooth_searching, color: Color(0xFF00E5FF), size: 16),
+              icon: const Icon(Icons.bluetooth_searching,
+                  color: Color(0xFF00E5FF), size: 16),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               tooltip: 'Scan OBD Bluetooth',
@@ -725,7 +909,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
               },
               child: Text(
                 widget.obdService.isMockMode ? 'Stop' : 'Sim',
-                style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 9, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: Color(0xFF00E5FF),
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -752,30 +939,37 @@ class _CockpitScreenState extends State<CockpitScreen> {
           isRecording
               ? 'FINISH TRIP (${tripMgr.distanceKm.toStringAsFixed(1)} KM • ${_formatDuration(tripMgr.elapsed)})'
               : 'START TRIP (STANDALONE GPS)',
-          style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
+          style: const TextStyle(
+              fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
         ),
       ),
     );
   }
 
-  List<Widget> _buildMetricCards(bool isRecording, bool isObdLive, TripManager tripMgr, bool isOverheat, bool isLowBatt) {
+  List<Widget> _buildMetricCards(bool isRecording, bool isObdLive,
+      TripManager tripMgr, bool isOverheat, bool isLowBatt) {
     return [
+      // Card 1: Range or Trip Distance
       _buildMetricCard(
         title: isRecording ? 'JARAK TRIP INI' : 'SISA RANGE (DTE)',
-        value: isRecording ? tripMgr.distanceKm.toStringAsFixed(1) : '185',
-        unit: 'KM',
+        value: isRecording
+            ? tripMgr.distanceKm.toStringAsFixed(1)
+            : (isObdLive ? '185' : '--'),
+        unit: isRecording ? 'KM' : (isObdLive ? 'KM' : 'BUTUH OBD'),
         icon: isRecording ? Icons.route : Icons.local_gas_station,
         accentColor: const Color(0xFF00FF66),
       ),
+      // Card 2: MotoGP Lean Angle
       _buildMetricCard(
         title: 'LEAN ANGLE (MOTOGP)',
         value: _currentSensor.rollAngleDeg.abs().toStringAsFixed(0),
-        unit: _currentSensor.rollAngleDeg < -2.0
+        unit: _currentSensor.rollAngleDeg < -1.5
             ? '° LEFT'
-            : (_currentSensor.rollAngleDeg > 2.0 ? '° RIGHT' : '° CVR'),
+            : (_currentSensor.rollAngleDeg > 1.5 ? '° RIGHT' : '° CVR'),
         icon: Icons.screen_rotation,
         accentColor: const Color(0xFFFFB300),
       ),
+      // Card 3: Radiator Temp or G-Force
       _buildMetricCard(
         title: isObdLive ? 'SUHU RADIATOR' : 'G-FORCE SENSOR',
         value: isObdLive
@@ -786,11 +980,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
         accentColor: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF),
         isAlert: isOverheat,
       ),
+      // Card 4: Battery Voltage or Top Speed
       _buildMetricCard(
         title: isObdLive ? 'TEGANGAN AKI' : 'TOP SPEED RECORD',
         value: isObdLive
             ? _currentFrame.batteryVoltage.toStringAsFixed(1)
-            : tripMgr.maxSpeedKmh.toStringAsFixed(0),
+            : (tripMgr.maxSpeedKmh > 0
+                ? tripMgr.maxSpeedKmh.toStringAsFixed(0)
+                : '--'),
         unit: isObdLive ? 'VOLT' : 'KM/H',
         icon: isObdLive ? Icons.battery_charging_full : Icons.military_tech,
         accentColor: isLowBatt ? Colors.redAccent : const Color(0xFF7C4DFF),

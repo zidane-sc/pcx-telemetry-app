@@ -38,8 +38,13 @@ class _HomeScreenState extends State<HomeScreen> {
         sensorHub: widget.sensorHub,
         pbService: widget.pbService,
       ),
-      const PreRideScreen(),
-      const DiagnosticsScreen(),
+      PreRideScreen(
+        obdService: widget.obdService,
+        pbService: widget.pbService,
+      ),
+      DiagnosticsScreen(
+        obdService: widget.obdService,
+      ),
       const MaintenanceScreen(),
       const TripsScreen(),
     ];

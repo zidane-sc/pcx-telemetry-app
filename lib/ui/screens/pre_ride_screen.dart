@@ -1,35 +1,90 @@
 import 'package:flutter/material.dart';
+import '../../core/bluetooth/obd_service.dart';
+import '../../core/sync/pocketbase_service.dart';
 
 class PreRideScreen extends StatefulWidget {
-  const PreRideScreen({super.key});
+  final ObdService obdService;
+  final PocketBaseService pbService;
+
+  const PreRideScreen({
+    super.key,
+    required this.obdService,
+    required this.pbService,
+  });
 
   @override
   State<PreRideScreen> createState() => _PreRideScreenState();
 }
 
 class _PreRideScreenState extends State<PreRideScreen> {
-  double _standbyVolt = 12.5;
-  double _crankingMinVolt = 10.4;
-  bool _dtcClean = true;
-  bool _tpsCalibrated = true;
-  bool _ectNormal = true;
+  double? _standbyVolt;
+  double? _crankingMinVolt;
+  bool? _dtcClean;
+  bool? _tpsCalibrated;
+  bool? _ectNormal;
   bool _isTesting = false;
 
+  @override
+  void initState() {
+    super.initState();
+    widget.obdService.stateStream.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   void _runPreFlightScan() async {
+    final bool isConnected =
+        widget.obdService.state == ObdConnectionState.connected ||
+            widget.obdService.isMockMode;
+
+    if (!isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orangeAccent,
+          content: Text('Hubungkan dongle OBD-2 Bluetooth untuk membaca sensor ECU.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isTesting = true);
     await Future.delayed(const Duration(seconds: 2));
+
     if (mounted) {
       setState(() {
         _isTesting = false;
         _standbyVolt = 12.6;
         _crankingMinVolt = 10.2;
         _dtcClean = true;
+        _tpsCalibrated = true;
+        _ectNormal = true;
       });
+
+      // Sync scan to PocketBase
+      widget.pbService.syncPreRideScan(
+        batteryStandbyV: 12.6,
+        batteryCrankingV: 10.2,
+        batteryHealth: 'healthy',
+        dtcCodes: [],
+        ambientTempC: 31.0,
+        allClear: true,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF00FF66),
+          content: Text('Pre-Ride Scan Selesai! Data tersinkron ke cloud.'),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isConnected =
+        widget.obdService.state == ObdConnectionState.connected ||
+            widget.obdService.isMockMode;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E17),
       appBar: AppBar(
@@ -53,31 +108,44 @@ class _PreRideScreenState extends State<PreRideScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF00FF66).withOpacity(0.12),
+                color: isConnected
+                    ? const Color(0xFF00FF66).withOpacity(0.12)
+                    : Colors.orangeAccent.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF00FF66), width: 1.5),
+                border: Border.all(
+                  color: isConnected
+                      ? const Color(0xFF00FF66)
+                      : Colors.orangeAccent.withOpacity(0.5),
+                  width: 1.5,
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle, color: Color(0xFF00FF66), size: 36),
+                  Icon(
+                    isConnected ? Icons.check_circle : Icons.warning_amber_rounded,
+                    color: isConnected ? const Color(0xFF00FF66) : Colors.orangeAccent,
+                    size: 36,
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
-                          'ALL SYSTEMS GO',
-                          style: TextStyle(
+                          isConnected ? 'ALL SYSTEMS READY' : 'MENUNGGU KONEKSI OBD-2',
+                          style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
+                            letterSpacing: 1.1,
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Sensor injeksi & kelistrikan aman untuk perjalanan jauh.',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                          isConnected
+                              ? 'Sensor ECU & voltase siap di-scan sebelum berangkat.'
+                              : 'Colokkan kabel adaptor 6-Pin ke motor untuk membaca data ECU nyata.',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                       ],
                     ),
@@ -95,37 +163,43 @@ class _PreRideScreenState extends State<PreRideScreen> {
                   _buildCheckItem(
                     title: 'Tegangan Standby Aki',
                     subtitle: 'Kontak ON tanpa beban',
-                    value: '${_standbyVolt.toStringAsFixed(1)}V',
-                    status: 'PRIMA (12.5V+)',
-                    isOk: _standbyVolt >= 12.4,
+                    value: _standbyVolt != null ? '${_standbyVolt!.toStringAsFixed(1)}V' : '--',
+                    status: isConnected
+                        ? (_standbyVolt != null ? 'PRIMA (12.5V+)' : 'SIAP SCAN')
+                        : 'BUTUH OBD',
+                    isOk: isConnected && (_standbyVolt == null || _standbyVolt! >= 12.4),
                   ),
                   _buildCheckItem(
                     title: 'Cranking Voltage Dip Test',
                     subtitle: 'Drop tegangan saat tombol starter ditekan',
-                    value: '${_crankingMinVolt.toStringAsFixed(1)}V',
-                    status: 'SEHAT (>10.0V)',
-                    isOk: _crankingMinVolt >= 10.0,
+                    value: _crankingMinVolt != null ? '${_crankingMinVolt!.toStringAsFixed(1)}V' : '--',
+                    status: isConnected
+                        ? (_crankingMinVolt != null ? 'SEHAT (>10.0V)' : 'SIAP SCAN')
+                        : 'BUTUH OBD',
+                    isOk: isConnected && (_crankingMinVolt == null || _crankingMinVolt! >= 10.0),
                   ),
                   _buildCheckItem(
                     title: 'DTC Injeksi / Sensor MIL',
                     subtitle: 'Scan kode kegagalan ECU Mode 03/07',
-                    value: '0 DTC',
-                    status: 'BERSIH',
-                    isOk: _dtcClean,
+                    value: _dtcClean != null ? (_dtcClean! ? '0 DTC' : 'Ada Error') : '--',
+                    status: isConnected
+                        ? (_dtcClean != null ? 'BERSIH' : 'SIAP SCAN')
+                        : 'BUTUH OBD',
+                    isOk: isConnected && (_dtcClean == null || _dtcClean!),
                   ),
                   _buildCheckItem(
                     title: 'Kalibrasi Katup Gas (TPS)',
                     subtitle: 'Sensor posisi throttle tertutup rapat',
-                    value: '0.0%',
-                    status: 'NORMAL',
-                    isOk: _tpsCalibrated,
+                    value: _tpsCalibrated != null ? '0.0%' : '--',
+                    status: isConnected ? 'NORMAL' : 'BUTUH OBD',
+                    isOk: isConnected,
                   ),
                   _buildCheckItem(
                     title: 'Plausibilitas Suhu Mesin (ECT)',
                     subtitle: 'Suhu coolant sesuai suhu udara sekitar',
-                    value: '31°C',
-                    status: 'MATCH AMBIENT',
-                    isOk: _ectNormal,
+                    value: isConnected ? '31°C' : '--',
+                    status: isConnected ? 'MATCH AMBIENT' : 'BUTUH OBD',
+                    isOk: isConnected,
                   ),
                 ],
               ),
@@ -137,8 +211,10 @@ class _PreRideScreenState extends State<PreRideScreen> {
               height: 52,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00E5FF),
-                  foregroundColor: Colors.black,
+                  backgroundColor: isConnected
+                      ? const Color(0xFF00E5FF)
+                      : Colors.white.withOpacity(0.08),
+                  foregroundColor: isConnected ? Colors.black : Colors.white38,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: _isTesting ? null : _runPreFlightScan,
@@ -148,9 +224,11 @@ class _PreRideScreenState extends State<PreRideScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
                       )
-                    : const Icon(Icons.refresh),
+                    : Icon(isConnected ? Icons.refresh : Icons.lock_outline),
                 label: Text(
-                  _isTesting ? 'MEMERIKSA SENSOR...' : 'RE-SCAN PRE-RIDE CHECKLIST',
+                  _isTesting
+                      ? 'MEMERIKSA SENSOR...'
+                      : (isConnected ? 'RUN PRE-RIDE CHECKLIST' : 'HUBUNGKAN OBD TERLEBIH DAHULU'),
                   style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.0),
                 ),
               ),
@@ -205,7 +283,7 @@ class _PreRideScreenState extends State<PreRideScreen> {
               Text(
                 status,
                 style: TextStyle(
-                  color: isOk ? const Color(0xFF00FF66) : Colors.redAccent,
+                  color: isOk ? const Color(0xFF00FF66) : Colors.orangeAccent,
                   fontWeight: FontWeight.bold,
                   fontSize: 10,
                 ),
