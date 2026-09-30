@@ -6,7 +6,7 @@ import '../../core/bluetooth/obd_service.dart';
 import '../../core/sensors/sensor_hub.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/sync/pocketbase_service.dart';
-import '../../core/overlay/overlay_manager.dart';
+import '../../core/pip/pip_manager.dart';
 
 class CockpitScreen extends StatefulWidget {
   final ObdService obdService;
@@ -93,46 +93,29 @@ class _CockpitScreenState extends State<CockpitScreen> {
     }
   }
 
-  void _toggleFloatingOverlay() async {
-    final hasPerm = await OverlayManager().checkPermission();
-    if (!hasPerm) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.orangeAccent,
-          content: const Text('Aktifkan izin "Tampilkan di atas aplikasi lain" untuk floating bubble.'),
-          action: SnackBarAction(
-            label: 'IZINKAN',
-            textColor: Colors.black,
-            onPressed: () => OverlayManager().requestPermission(),
-          ),
-        ),
-      );
-      await OverlayManager().requestPermission();
-      return;
-    }
-
-    if (OverlayManager().isOverlayOpen) {
-      await OverlayManager().closeOverlay();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Floating HUD ditutup.')),
-      );
-    } else {
-      await OverlayManager().showFloatingOverlay(
-        dteKm: 185.0,
-        kml: 46.5,
-        ectC: 88.0,
-      );
+  void _enterPipMode() async {
+    final pipMgr = PipManager();
+    final available = await pipMgr.isPipAvailable;
+    if (!available) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          backgroundColor: Color(0xFF00FF66),
-          content: Text('Floating HUD Aktif! Tekan Home atau buka Google Maps.'),
+          backgroundColor: Colors.orangeAccent,
+          content: Text('Mode Picture-in-Picture (PiP) tidak didukung pada HP ini.'),
+        ),
+      );
+      return;
+    }
+
+    final success = await pipMgr.enablePip();
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Gagal mengaktifkan mode PiP.'),
         ),
       );
     }
-    setState(() {});
   }
 
   void _showTripSummaryDialog(TripRecord record) {
@@ -705,21 +688,17 @@ class _CockpitScreenState extends State<CockpitScreen> {
             ),
             const SizedBox(width: 4),
 
-            // Floating HUD PiP Button
+            // Native PiP Button (Floating over Google Maps)
             IconButton(
-              icon: Icon(
-                OverlayManager().isOverlayOpen
-                    ? Icons.picture_in_picture
-                    : Icons.picture_in_picture_alt,
-                color: OverlayManager().isOverlayOpen
-                    ? const Color(0xFF00FF66)
-                    : const Color(0xFF00E5FF),
+              icon: const Icon(
+                Icons.picture_in_picture_alt,
+                color: Color(0xFF00E5FF),
                 size: 16,
               ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              tooltip: 'Floating HUD (Di atas Google Maps)',
-              onPressed: _toggleFloatingOverlay,
+              tooltip: 'Floating PiP HUD (Di atas Google Maps)',
+              onPressed: _enterPipMode,
             ),
             const SizedBox(width: 2),
 
