@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,58 +8,69 @@ import 'core/sync/pocketbase_service.dart';
 import 'core/audio/voice_alert_service.dart';
 import 'core/overlay/overlay_manager.dart';
 import 'core/trip/trip_manager.dart';
+import 'core/logger/app_logger.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/overlay/floating_bubble_widget.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Force dark OLED system bars
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF0A0E17),
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
-
-  final obdService = ObdService();
-  final sensorHub = SensorHub();
-  final pbService = PocketBaseService();
-
-  // Initialize Voice Alert Engine & Trip Manager
-  await VoiceAlertService().init();
-  await TripManager().init(pbService: pbService);
-
-  // Background auto-login to PocketBase
-  pbService.autoLogin();
-
-  // Start background sensor monitoring
-  sensorHub.start();
-
-  // Wire telemetry frames to TTS Voice Alert Engine & Floating Overlay
-  obdService.telemetryStream.listen((frame) {
-    VoiceAlertService().checkTelemetryThresholds(
-      ectC: frame.ectC,
-      batteryVoltage: frame.batteryVoltage,
-      dteKm: 185.0,
+    // Force dark OLED system bars
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Color(0xFF0A0E17),
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
     );
 
-    if (OverlayManager().isOverlayOpen) {
-      OverlayManager().updateTelemetryData(
-        dteKm: 185.0,
-        kml: frame.instantaneousKml,
-        ectC: frame.ectC,
-      );
-    }
-  });
+    final obdService = ObdService();
+    final sensorHub = SensorHub();
+    final pbService = PocketBaseService();
 
-  runApp(PcxTelemetryApp(
-    obdService: obdService,
-    sensorHub: sensorHub,
-    pbService: pbService,
-  ));
+    // Initialize Global Crash Logger (Sentry Mini) immediately
+    AppLogger().initialize(pb: pbService.pb);
+
+    // Initialize Voice Alert Engine & Trip Manager
+    await VoiceAlertService().init();
+    await TripManager().init(pbService: pbService);
+
+    // Background auto-login to PocketBase
+    pbService.autoLogin();
+
+    // Start background sensor monitoring
+    sensorHub.start();
+
+    // Wire telemetry frames to TTS Voice Alert Engine & Floating Overlay
+    obdService.telemetryStream.listen((frame) {
+      VoiceAlertService().checkTelemetryThresholds(
+        ectC: frame.ectC,
+        batteryVoltage: frame.batteryVoltage,
+        dteKm: 185.0,
+      );
+
+      if (OverlayManager().isOverlayOpen) {
+        OverlayManager().updateTelemetryData(
+          dteKm: 185.0,
+          kml: frame.instantaneousKml,
+          ectC: frame.ectC,
+        );
+      }
+    });
+
+    runApp(PcxTelemetryApp(
+      obdService: obdService,
+      sensorHub: sensorHub,
+      pbService: pbService,
+    ));
+  }, (error, stack) {
+    AppLogger().logError(
+      errorType: 'ZoneUncaughtException',
+      stackTrace: '$error\n$stack',
+    );
+  });
 }
 
 /// Overlay Window Entry Point for Android SYSTEM_ALERT_WINDOW
