@@ -6,6 +6,7 @@ import '../../core/bluetooth/obd_service.dart';
 import '../../core/sensors/sensor_hub.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/sync/pocketbase_service.dart';
+import '../../core/overlay/overlay_manager.dart';
 
 class CockpitScreen extends StatefulWidget {
   final ObdService obdService;
@@ -90,6 +91,48 @@ class _CockpitScreenState extends State<CockpitScreen> {
       if (!mounted || record == null) return;
       _showTripSummaryDialog(record);
     }
+  }
+
+  void _toggleFloatingOverlay() async {
+    final hasPerm = await OverlayManager().checkPermission();
+    if (!hasPerm) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.orangeAccent,
+          content: const Text('Aktifkan izin "Tampilkan di atas aplikasi lain" untuk floating bubble.'),
+          action: SnackBarAction(
+            label: 'IZINKAN',
+            textColor: Colors.black,
+            onPressed: () => OverlayManager().requestPermission(),
+          ),
+        ),
+      );
+      await OverlayManager().requestPermission();
+      return;
+    }
+
+    if (OverlayManager().isOverlayOpen) {
+      await OverlayManager().closeOverlay();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Floating HUD ditutup.')),
+      );
+    } else {
+      await OverlayManager().showFloatingOverlay(
+        dteKm: 185.0,
+        kml: 46.5,
+        ectC: 88.0,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF00FF66),
+          content: Text('Floating HUD Aktif! Tekan Home atau buka Google Maps.'),
+        ),
+      );
+    }
+    setState(() {});
   }
 
   void _showTripSummaryDialog(TripRecord record) {
@@ -362,7 +405,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
         return 'CONNECTION ERROR';
       case ObdConnectionState.disconnected:
       default:
-        return 'STANDALONE GPS MODE';
+        return 'STANDALONE GPS';
     }
   }
 
@@ -414,11 +457,11 @@ class _CockpitScreenState extends State<CockpitScreen> {
     final bool isLowBatt = _currentFrame.batteryVoltage < 11.8;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
       child: Column(
         children: [
           _buildTopStatusBar(),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           // Giant Speed Display
           Center(
@@ -447,9 +490,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           _buildTripButton(isRecording, tripMgr),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
           // 2x2 Telemetry Grid
           Expanded(
@@ -509,7 +552,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     letterSpacing: 2.0,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   height: 38,
@@ -536,7 +579,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
             ),
           ),
 
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
 
           // Right Pane: Top Status Bar + 2x2 Compact Grid (58% width)
           Expanded(
@@ -565,40 +608,52 @@ class _CockpitScreenState extends State<CockpitScreen> {
   Widget _buildTopStatusBar() {
     final connColor = _getConnectionColor();
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        InkWell(
-          onTap: _showBluetoothPicker,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: connColor,
-                    shape: BoxShape.circle,
+        // Left Connection Pill (wrapped in Expanded so it never overflows)
+        Expanded(
+          child: InkWell(
+            onTap: _showBluetoothPicker,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: connColor,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _getConnectionStatusText(),
-                  style: TextStyle(
-                    color: connColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      _getConnectionStatusText(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: connColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_drop_down, color: Colors.white54, size: 16),
-              ],
+                  const SizedBox(width: 2),
+                  const Icon(Icons.arrow_drop_down, color: Colors.white54, size: 16),
+                ],
+              ),
             ),
           ),
         ),
+
+        const SizedBox(width: 4),
+
+        // Right Action Controls
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Cloud Sync Indicator
             ValueListenableBuilder<bool>(
@@ -610,7 +665,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   },
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
                       color: isConnected
                           ? const Color(0xFF00FF66).withOpacity(0.12)
@@ -626,14 +681,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       children: [
                         Icon(
                           Icons.cloud_done,
-                          size: 11,
+                          size: 10,
                           color: isConnected
                               ? const Color(0xFF00FF66)
                               : Colors.white38,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 3),
                         Text(
-                          isConnected ? 'SYNC ON' : 'OFFLINE',
+                          isConnected ? 'SYNC' : 'OFF',
                           style: TextStyle(
                             color: isConnected
                                 ? const Color(0xFF00FF66)
@@ -648,32 +703,50 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 );
               },
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
+
+            // Floating HUD PiP Button
             IconButton(
-              icon: const Icon(Icons.bluetooth_searching, color: Color(0xFF00E5FF), size: 18),
+              icon: Icon(
+                OverlayManager().isOverlayOpen
+                    ? Icons.picture_in_picture
+                    : Icons.picture_in_picture_alt,
+                color: OverlayManager().isOverlayOpen
+                    ? const Color(0xFF00FF66)
+                    : const Color(0xFF00E5FF),
+                size: 16,
+              ),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              tooltip: 'Floating HUD (Di atas Google Maps)',
+              onPressed: _toggleFloatingOverlay,
+            ),
+            const SizedBox(width: 2),
+
+            // Bluetooth Scan Button
+            IconButton(
+              icon: const Icon(Icons.bluetooth_searching, color: Color(0xFF00E5FF), size: 16),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               tooltip: 'Scan OBD Bluetooth',
               onPressed: _showBluetoothPicker,
             ),
-            const SizedBox(width: 8),
-            TextButton.icon(
+            const SizedBox(width: 4),
+
+            // Simulation Toggle Pill
+            TextButton(
               style: TextButton.styleFrom(
                 backgroundColor: Colors.white.withOpacity(0.08),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                minimumSize: const Size(50, 24),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                minimumSize: const Size(36, 22),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               onPressed: () {
                 widget.obdService.enableMockMode(!widget.obdService.isMockMode);
               },
-              icon: Icon(
-                widget.obdService.isMockMode ? Icons.cancel : Icons.play_arrow,
-                size: 14,
-                color: const Color(0xFF00E5FF),
-              ),
-              label: Text(
-                widget.obdService.isMockMode ? 'Stop Sim' : 'Start Sim',
-                style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 10),
+              child: Text(
+                widget.obdService.isMockMode ? 'Stop' : 'Sim',
+                style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 9, fontWeight: FontWeight.bold),
               ),
             ),
           ],

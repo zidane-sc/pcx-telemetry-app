@@ -37,7 +37,7 @@ class OverlayManager {
         visibility: NotificationVisibility.visibilityPublic,
         positionGravity: PositionGravity.auto,
         height: 140,
-        width: 750,
+        width: WindowSize.matchParent,
       );
       _isOverlayOpen = true;
     }
