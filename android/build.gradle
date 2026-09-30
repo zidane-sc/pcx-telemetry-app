@@ -9,6 +9,27 @@ allprojects {
 }
 
 rootProject.buildDir = '../build'
+
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                if (!hasProperty('namespace') || namespace == null || namespace.isEmpty()) {
+                    def defaultNamespace = project.group?.toString()?.trim()
+                    if (defaultNamespace == null || defaultNamespace.isEmpty() || defaultNamespace == "unspecified") {
+                        if (project.name == "flutter_bluetooth_serial") {
+                            defaultNamespace = "io.github.edufolly.flutterbluetoothserial"
+                        } else {
+                            defaultNamespace = "com.zidane.${project.name.replace('-', '_')}"
+                        }
+                    }
+                    namespace = defaultNamespace
+                }
+            }
+        }
+    }
+}
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
