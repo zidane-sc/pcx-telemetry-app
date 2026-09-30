@@ -11,6 +11,8 @@ allprojects {
 rootProject.buildDir = '../build'
 
 subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+
     project.plugins.withId("com.android.library") {
         if (project.android.hasProperty("namespace")) {
             if (project.android.namespace == null || project.android.namespace.isEmpty()) {
@@ -27,14 +29,6 @@ subprojects {
             }
         }
     }
-}
-
-subprojects {
-    project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-
-subprojects {
-    project.evaluationDependsOn(':app')
 }
 
 tasks.register("clean", Delete) {
