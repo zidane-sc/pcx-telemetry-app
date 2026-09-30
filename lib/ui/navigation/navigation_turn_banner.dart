@@ -30,6 +30,13 @@ class NavigationTurnBanner extends StatelessWidget {
     final totalMin =
         (navMgr.currentRoute!.totalDurationSec / 60.0).toStringAsFixed(0);
 
+    // Calculate Estimated Time of Arrival (ETA)
+    final etaTime = DateTime.now().add(
+      Duration(seconds: navMgr.currentRoute!.totalDurationSec.toInt()),
+    );
+    final etaStr =
+        "${etaTime.hour.toString().padLeft(2, '0')}:${etaTime.minute.toString().padLeft(2, '0')} WIB";
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -45,88 +52,93 @@ class NavigationTurnBanner extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Maneuver Turn Icon Container
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00E5FF).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(step.icon, color: const Color(0xFF00E5FF), size: 26),
-          ),
-          const SizedBox(width: 10),
+          Row(
+            children: [
+              // Maneuver Turn Icon Container
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00E5FF).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(step.icon, color: const Color(0xFF00E5FF), size: 26),
+              ),
+              const SizedBox(width: 10),
 
-          // Maneuver Text & Distance
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
+              // Maneuver Text & Distance
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      distStr,
-                      style: const TextStyle(
-                        color: Color(0xFF00FF66),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: 'monospace',
-                        letterSpacing: 0.8,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          distStr,
+                          style: const TextStyle(
+                            color: Color(0xFF00FF66),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'monospace',
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'ETA $etaStr • $totalKm km',
+                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '$totalKm km • $totalMin mnt',
-                        style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 9),
+                    const SizedBox(height: 2),
+                    Text(
+                      step.instruction,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  step.instruction,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
+              ),
+
+              // Map Toggle Button
+              IconButton(
+                icon: Icon(
+                  isMapVisible ? Icons.map : Icons.map_outlined,
+                  color: isMapVisible ? const Color(0xFF00FF66) : const Color(0xFF00E5FF),
+                  size: 20,
                 ),
-              ],
-            ),
-          ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                tooltip: 'Tampilkan / Sembunyikan Peta',
+                onPressed: onToggleMap,
+              ),
 
-          // Map Toggle Button
-          IconButton(
-            icon: Icon(
-              isMapVisible ? Icons.map : Icons.map_outlined,
-              color: isMapVisible ? const Color(0xFF00FF66) : const Color(0xFF00E5FF),
-              size: 20,
-            ),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            tooltip: 'Tampilkan / Sembunyikan Peta',
-            onPressed: onToggleMap,
-          ),
-
-          // Stop Navigation Button
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.redAccent, size: 18),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            tooltip: 'Hentikan Navigasi',
-            onPressed: () {
-              navMgr.stopNavigation();
-            },
+              // Stop Navigation Button
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.redAccent, size: 18),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                tooltip: 'Hentikan Navigasi',
+                onPressed: () {
+                  navMgr.stopNavigation();
+                },
+              ),
+            ],
           ),
         ],
       ),

@@ -14,6 +14,7 @@ import '../../core/audio/voice_alert_service.dart';
 import '../../core/navigation/navigation_manager.dart';
 import '../navigation/search_destination_sheet.dart';
 import '../navigation/navigation_turn_banner.dart';
+import '../navigation/cockpit_map_view.dart';
 import '../common/cyber_map_tiles.dart';
 
 class CockpitScreen extends StatefulWidget {
@@ -660,63 +661,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
               navMgr.currentRoute != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: SizedBox(
-                  height: 190,
-                  width: double.infinity,
-                  child: FlutterMap(
-                    options: MapOptions(
-                      initialCenter: LatLng(
-                        _currentSensor.latitude != 0.0
-                            ? _currentSensor.latitude
-                            : -6.2088,
-                        _currentSensor.longitude != 0.0
-                            ? _currentSensor.longitude
-                            : 106.8456,
-                      ),
-                      initialZoom: 16.0,
-                    ),
-                    children: [
-                      CyberMapTiles.buildTileLayer(),
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: navMgr.currentRoute!.polyline,
-                            strokeWidth: 4.5,
-                            color: const Color(0xFF00E5FF),
-                          ),
-                        ],
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: LatLng(_currentSensor.latitude,
-                                _currentSensor.longitude),
-                            width: 24,
-                            height: 24,
-                            child: const Icon(
-                              Icons.navigation,
-                              color: Color(0xFF00FF66),
-                              size: 22,
-                            ),
-                          ),
-                          if (navMgr.destination != null)
-                            Marker(
-                              point: navMgr.destination!.toLatLng,
-                              width: 24,
-                              height: 24,
-                              child: const Icon(
-                                Icons.flag_circle,
-                                color: Colors.redAccent,
-                                size: 22,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+              child: CockpitMapView(
+                sensorData: _currentSensor,
+                navMgr: navMgr,
+                height: 190,
               ),
             ),
 
@@ -864,59 +812,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   child: navMgr.isNavigating &&
                           _isInlineMapVisible &&
                           navMgr.currentRoute != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: FlutterMap(
-                            options: MapOptions(
-                              initialCenter: LatLng(
-                                _currentSensor.latitude != 0.0
-                                    ? _currentSensor.latitude
-                                    : -6.2088,
-                                _currentSensor.longitude != 0.0
-                                    ? _currentSensor.longitude
-                                    : 106.8456,
-                              ),
-                              initialZoom: 16.0,
-                            ),
-                            children: [
-                              CyberMapTiles.buildTileLayer(),
-                              PolylineLayer(
-                                polylines: [
-                                  Polyline(
-                                    points: navMgr.currentRoute!.polyline,
-                                    strokeWidth: 4.5,
-                                    color: const Color(0xFF00E5FF),
-                                  ),
-                                ],
-                              ),
-                              MarkerLayer(
-                                markers: [
-                                  Marker(
-                                    point: LatLng(_currentSensor.latitude,
-                                        _currentSensor.longitude),
-                                    width: 24,
-                                    height: 24,
-                                    child: const Icon(
-                                      Icons.navigation,
-                                      color: Color(0xFF00FF66),
-                                      size: 22,
-                                    ),
-                                  ),
-                                  if (navMgr.destination != null)
-                                    Marker(
-                                      point: navMgr.destination!.toLatLng,
-                                      width: 24,
-                                      height: 24,
-                                      child: const Icon(
-                                        Icons.flag_circle,
-                                        color: Colors.redAccent,
-                                        size: 22,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
+                      ? CockpitMapView(
+                          sensorData: _currentSensor,
+                          navMgr: navMgr,
+                          height: double.infinity,
                         )
                       : GridView.count(
                           crossAxisCount: 2,

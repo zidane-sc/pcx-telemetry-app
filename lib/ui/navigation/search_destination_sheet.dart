@@ -33,6 +33,13 @@ class _SearchDestinationSheetState extends State<SearchDestinationSheet> {
   bool _isRouting = false;
   List<NavPlace> _results = [];
 
+  final List<Map<String, dynamic>> _quickShortcuts = [
+    {'name': 'SPBU Pertamina', 'icon': Icons.local_gas_station, 'query': 'SPBU Pertamina'},
+    {'name': 'SPBU Shell', 'icon': Icons.local_gas_station, 'query': 'Shell'},
+    {'name': 'Bengkel AHASS', 'icon': Icons.build, 'query': 'AHASS'},
+    {'name': 'Rest Area / Kopi', 'icon': Icons.local_cafe, 'query': 'Indomaret Point'},
+  ];
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -50,7 +57,7 @@ class _SearchDestinationSheetState extends State<SearchDestinationSheet> {
       return;
     }
 
-    _debounce = Timer(const Duration(milliseconds: 400), () async {
+    _debounce = Timer(const Duration(milliseconds: 350), () async {
       setState(() => _isLoading = true);
       final places = await RoutingService.searchPlaces(
         query,
@@ -168,6 +175,34 @@ class _SearchDestinationSheetState extends State<SearchDestinationSheet> {
           ),
 
           const SizedBox(height: 10),
+
+          // Quick Category Shortcuts (SPBU, Bengkel, etc.)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _quickShortcuts.map((sc) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ActionChip(
+                    avatar: Icon(sc['icon'] as IconData, size: 14, color: const Color(0xFF00FF66)),
+                    label: Text(
+                      sc['name'] as String,
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    backgroundColor: Colors.white.withOpacity(0.06),
+                    side: BorderSide(color: const Color(0xFF00FF66).withOpacity(0.3), width: 1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    onPressed: () {
+                      _searchCtrl.text = sc['query'] as String;
+                      _onSearchChanged(sc['query'] as String);
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+          const SizedBox(height: 8),
 
           if (_isRouting)
             const Padding(
