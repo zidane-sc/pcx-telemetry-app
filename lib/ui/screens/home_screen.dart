@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Diagnosa',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.history_toggle_drop),
+            icon: Icon(Icons.handyman),
             label: 'Servis',
           ),
           BottomNavigationBarItem(
