@@ -31,6 +31,9 @@ void main() async {
   await VoiceAlertService().init();
   await TripManager().init(pbService: pbService);
 
+  // Background auto-login to PocketBase
+  pbService.autoLogin();
+
   // Start background sensor monitoring
   sensorHub.start();
 
@@ -140,6 +143,7 @@ class _PcxTelemetryAppState extends State<PcxTelemetryApp>
       home: HomeScreen(
         obdService: widget.obdService,
         sensorHub: widget.sensorHub,
+        pbService: widget.pbService,
       ),
     );
   }

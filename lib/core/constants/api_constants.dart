@@ -1,8 +1,13 @@
 class ApiConstants {
   // Cloudflare Quick Tunnel URL (or local LAN fallback)
-  static const String defaultBaseUrl = 'https://aspects-healing-assist-highlights.trycloudflare.com';
+  static const String defaultBaseUrl =
+      'https://reduce-tires-nelson-developed.trycloudflare.com';
   static const String lanBaseUrl = 'http://192.168.1.53:8092';
   static const String tailscaleBaseUrl = 'http://100.115.78.109:8092';
+
+  // Default rider credentials for seamless background auto-login
+  static const String defaultUserEmail = 'zidanesc02@gmail.com';
+  static const String defaultUserPass = 'pcx160telemetry';
 
   // Collections
   static const String collectionVehicles = 'vehicles';

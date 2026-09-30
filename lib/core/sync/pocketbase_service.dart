@@ -5,19 +5,49 @@ import '../constants/api_constants.dart';
 import '../logger/app_logger.dart';
 
 class PocketBaseService {
-  late final PocketBase pb;
+  late PocketBase pb;
   String? currentVehicleId;
+
+  final ValueNotifier<bool> isConnectedNotifier = ValueNotifier<bool>(false);
+  bool get isAuthenticated => pb.authStore.isValid && isConnectedNotifier.value;
+  String? get currentUserId => pb.authStore.model?.id;
 
   PocketBaseService({String? baseUrl}) {
     pb = PocketBase(baseUrl ?? ApiConstants.defaultBaseUrl);
   }
 
-  bool get isAuthenticated => pb.authStore.isValid;
-  String? get currentUserId => pb.authStore.model?.id;
+  Future<bool> autoLogin() async {
+    final hosts = [
+      ApiConstants.defaultBaseUrl,
+      ApiConstants.lanBaseUrl,
+      ApiConstants.tailscaleBaseUrl,
+    ];
+
+    for (final host in hosts) {
+      try {
+        pb = PocketBase(host);
+        final success = await login(
+          ApiConstants.defaultUserEmail,
+          ApiConstants.defaultUserPass,
+        );
+        if (success) {
+          isConnectedNotifier.value = true;
+          debugPrint('[PBService] Successfully connected to host: $host');
+          return true;
+        }
+      } catch (e) {
+        debugPrint('[PBService] Failed connecting to $host: $e');
+      }
+    }
+
+    isConnectedNotifier.value = false;
+    return false;
+  }
 
   Future<bool> login(String email, String password) async {
     try {
-      final authData = await pb.collection('users').authWithPassword(email, password);
+      final authData =
+          await pb.collection('users').authWithPassword(email, password);
       AppLogger().initialize(pb: pb, userId: authData.record.id);
 
       // Cache token
@@ -27,9 +57,11 @@ class PocketBaseService {
 
       // Load or create default PCX 160 vehicle record
       await _ensureVehicleExists();
+      isConnectedNotifier.value = true;
       return true;
     } catch (e) {
       debugPrint('[PBService] Login error: $e');
+      isConnectedNotifier.value = false;
       return false;
     }
   }
@@ -37,15 +69,16 @@ class PocketBaseService {
   Future<void> _ensureVehicleExists() async {
     try {
       final list = await pb.collection(ApiConstants.collectionVehicles).getList(
-        page: 1,
-        perPage: 1,
-        filter: 'user = "$currentUserId"',
-      );
+            page: 1,
+            perPage: 1,
+            filter: 'user = "$currentUserId"',
+          );
 
       if (list.items.isNotEmpty) {
         currentVehicleId = list.items.first.id;
       } else {
-        final newVehicle = await pb.collection(ApiConstants.collectionVehicles).create(
+        final newVehicle =
+            await pb.collection(ApiConstants.collectionVehicles).create(
           body: {
             'user': currentUserId,
             'name': 'Honda PCX 160 eSP+ ABS',

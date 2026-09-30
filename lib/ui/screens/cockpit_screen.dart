@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/models/telemetry_data.dart';
 import '../../core/bluetooth/obd_service.dart';
 import '../../core/sensors/sensor_hub.dart';
 import '../../core/trip/trip_manager.dart';
+import '../../core/sync/pocketbase_service.dart';
 
 class CockpitScreen extends StatefulWidget {
   final ObdService obdService;
   final SensorHub sensorHub;
+  final PocketBaseService pbService;
 
   const CockpitScreen({
     super.key,
     required this.obdService,
     required this.sensorHub,
+    required this.pbService,
   });
 
   @override
@@ -169,6 +173,41 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
   void _showBluetoothPicker() async {
     try {
+      // 1. Explicitly request Android 12+ runtime permissions
+      final statuses = await [
+        Permission.bluetoothConnect,
+        Permission.bluetoothScan,
+        Permission.location,
+      ].request();
+
+      if (statuses[Permission.bluetoothConnect] == PermissionStatus.permanentlyDenied) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: const Text('Izin Bluetooth ditolak permanen. Buka Pengaturan HP untuk mengizinkan.'),
+            action: SnackBarAction(
+              label: 'PENGATURAN',
+              textColor: Colors.white,
+              onPressed: () => openAppSettings(),
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (statuses[Permission.bluetoothConnect] != PermissionStatus.granted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.orangeAccent,
+            content: Text('Izin Bluetooth Connect dibutuhkan untuk scan perangkat.'),
+          ),
+        );
+        return;
+      }
+
+      // 2. Fetch bonded devices cleanly
       final List<BluetoothDevice> devices =
           await FlutterBluetoothSerial.instance.getBondedDevices();
 
@@ -561,6 +600,55 @@ class _CockpitScreenState extends State<CockpitScreen> {
         ),
         Row(
           children: [
+            // Cloud Sync Indicator
+            ValueListenableBuilder<bool>(
+              valueListenable: widget.pbService.isConnectedNotifier,
+              builder: (context, isConnected, _) {
+                return InkWell(
+                  onTap: () {
+                    widget.pbService.autoLogin();
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isConnected
+                          ? const Color(0xFF00FF66).withOpacity(0.12)
+                          : Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isConnected
+                            ? const Color(0xFF00FF66).withOpacity(0.4)
+                            : Colors.white12,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.cloud_done,
+                          size: 11,
+                          color: isConnected
+                              ? const Color(0xFF00FF66)
+                              : Colors.white38,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          isConnected ? 'SYNC ON' : 'OFFLINE',
+                          style: TextStyle(
+                            color: isConnected
+                                ? const Color(0xFF00FF66)
+                                : Colors.white38,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 6),
             IconButton(
               icon: const Icon(Icons.bluetooth_searching, color: Color(0xFF00E5FF), size: 18),
               padding: EdgeInsets.zero,
@@ -568,7 +656,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
               tooltip: 'Scan OBD Bluetooth',
               onPressed: _showBluetoothPicker,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             TextButton.icon(
               style: TextButton.styleFrom(
                 backgroundColor: Colors.white.withOpacity(0.08),

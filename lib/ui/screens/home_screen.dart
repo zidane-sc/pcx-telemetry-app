@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/bluetooth/obd_service.dart';
 import '../../core/sensors/sensor_hub.dart';
+import '../../core/sync/pocketbase_service.dart';
 import 'cockpit_screen.dart';
 import 'pre_ride_screen.dart';
 import 'diagnostics_screen.dart';
@@ -10,11 +11,13 @@ import 'trips_screen.dart';
 class HomeScreen extends StatefulWidget {
   final ObdService obdService;
   final SensorHub sensorHub;
+  final PocketBaseService pbService;
 
   const HomeScreen({
     super.key,
     required this.obdService,
     required this.sensorHub,
+    required this.pbService,
   });
 
   @override
@@ -33,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
       CockpitScreen(
         obdService: widget.obdService,
         sensorHub: widget.sensorHub,
+        pbService: widget.pbService,
       ),
       const PreRideScreen(),
       const DiagnosticsScreen(),
