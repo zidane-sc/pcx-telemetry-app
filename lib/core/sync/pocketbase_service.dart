@@ -108,7 +108,11 @@ class PocketBaseService {
     required double ambientTempC,
     required bool allClear,
   }) async {
+    if (!isAuthenticated || currentVehicleId == null) {
+      await autoLogin();
+    }
     if (!isAuthenticated || currentVehicleId == null) return false;
+
     try {
       await pb.collection(ApiConstants.collectionPreRideScans).create(
         body: {
@@ -146,7 +150,12 @@ class PocketBaseService {
     required int hardBrakingCount,
     required String routePolyline,
   }) async {
+    // Auto-authenticate & ensure vehicle exists if not ready
+    if (!isAuthenticated || currentVehicleId == null) {
+      await autoLogin();
+    }
     if (!isAuthenticated || currentVehicleId == null) return false;
+
     try {
       await pb.collection(ApiConstants.collectionTrips).create(
         body: {

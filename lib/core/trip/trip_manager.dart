@@ -45,6 +45,27 @@ class TripRecord {
     required this.synced,
   });
 
+  TripRecord copyWith({bool? synced}) {
+    return TripRecord(
+      id: id,
+      startTime: startTime,
+      endTime: endTime,
+      durationMin: durationMin,
+      distanceKm: distanceKm,
+      avgSpeedKmh: avgSpeedKmh,
+      maxSpeedKmh: maxSpeedKmh,
+      fuelConsumedL: fuelConsumedL,
+      avgKml: avgKml,
+      tripCostIdr: tripCostIdr,
+      maxEctC: maxEctC,
+      maxLeanLeftDeg: maxLeanLeftDeg,
+      maxLeanRightDeg: maxLeanRightDeg,
+      hardBrakingCount: hardBrakingCount,
+      routePolyline: routePolyline,
+      synced: synced ?? this.synced,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'startTime': startTime.toIso8601String(),
@@ -129,6 +150,13 @@ class TripManager extends ChangeNotifier {
   Future<void> init({required PocketBaseService pbService}) async {
     _pbService = pbService;
     await _loadHistory();
+
+    // Listen to connection changes to flush offline unsynced trips
+    _pbService?.isConnectedNotifier.addListener(() {
+      if (_pbService?.isConnectedNotifier.value == true) {
+        flushUnsyncedTrips();
+      }
+    });
   }
 
   Future<void> _loadHistory() async {
@@ -140,6 +168,9 @@ class TripManager extends ChangeNotifier {
         _history.add(TripRecord.fromJson(jsonDecode(raw)));
       }
       notifyListeners();
+
+      // Attempt to flush unsynced trips on startup
+      flushUnsyncedTrips();
     } catch (e) {
       debugPrint('[TripManager] Error loading history: $e');
     }
@@ -272,36 +303,51 @@ class TripManager extends ChangeNotifier {
     await _saveHistory();
     notifyListeners();
 
-    // Auto-sync to PocketBase in background
-    _syncToPocketBase(record);
+    // Trigger immediate sync
+    flushUnsyncedTrips();
 
     return record;
   }
 
-  Future<void> _syncToPocketBase(TripRecord record) async {
+  Future<void> flushUnsyncedTrips() async {
     if (_pbService == null) return;
-    try {
-      final success = await _pbService!.syncTrip(
-        startTime: record.startTime,
-        endTime: record.endTime,
-        durationMin: record.durationMin,
-        distanceKm: record.distanceKm,
-        avgSpeedKmh: record.avgSpeedKmh,
-        maxSpeedKmh: record.maxSpeedKmh,
-        fuelConsumedL: record.fuelConsumedL,
-        avgKml: record.avgKml,
-        tripCostIdr: record.tripCostIdr,
-        maxEctC: record.maxEctC,
-        maxLeanLeftDeg: record.maxLeanLeftDeg,
-        maxLeanRightDeg: record.maxLeanRightDeg,
-        hardBrakingCount: record.hardBrakingCount,
-        routePolyline: record.routePolyline,
-      );
-      if (success) {
-        debugPrint('[TripManager] Trip successfully synced to PocketBase!');
+    bool changed = false;
+
+    for (int i = 0; i < _history.length; i++) {
+      final trip = _history[i];
+      if (!trip.synced) {
+        try {
+          final success = await _pbService!.syncTrip(
+            startTime: trip.startTime,
+            endTime: trip.endTime,
+            durationMin: trip.durationMin,
+            distanceKm: trip.distanceKm,
+            avgSpeedKmh: trip.avgSpeedKmh,
+            maxSpeedKmh: trip.maxSpeedKmh,
+            fuelConsumedL: trip.fuelConsumedL,
+            avgKml: trip.avgKml,
+            tripCostIdr: trip.tripCostIdr,
+            maxEctC: trip.maxEctC,
+            maxLeanLeftDeg: trip.maxLeanLeftDeg,
+            maxLeanRightDeg: trip.maxLeanRightDeg,
+            hardBrakingCount: trip.hardBrakingCount,
+            routePolyline: trip.routePolyline,
+          );
+
+          if (success) {
+            _history[i] = trip.copyWith(synced: true);
+            changed = true;
+            debugPrint('[TripManager] Synced trip ${trip.id} to PocketBase!');
+          }
+        } catch (e) {
+          debugPrint('[TripManager] Error syncing trip: $e');
+        }
       }
-    } catch (e) {
-      debugPrint('[TripManager] Sync to PocketBase failed: $e');
+    }
+
+    if (changed) {
+      await _saveHistory();
+      notifyListeners();
     }
   }
 }

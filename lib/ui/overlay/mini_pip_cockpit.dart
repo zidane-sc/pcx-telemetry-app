@@ -49,121 +49,132 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E17),
       body: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          color: const Color(0xFF0A0E17),
-          child: Row(
-            children: [
-              // Left: Speed Display
-              Expanded(
-                flex: 40,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      displaySpeed.toStringAsFixed(0),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 42,
-                        fontWeight: FontWeight.w900,
-                        height: 0.9,
-                        fontFamily: 'monospace',
-                      ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Using FittedBox with a standard 16:9 base canvas (320x180)
+            // guarantees ZERO render overflows on any Android PiP window dimension
+            return Center(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: Container(
+                  width: 320,
+                  height: 180,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A0E17),
+                    border: Border.all(
+                      color: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF).withOpacity(0.5),
+                      width: 2.0,
                     ),
-                    const Text(
-                      'KM/H',
-                      style: TextStyle(
-                        color: Color(0xFF00E5FF),
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
+                  ),
+                  child: Row(
+                    children: [
+                      // Left: Giant Speedometer
+                      Expanded(
+                        flex: 48,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              displaySpeed.toStringAsFixed(0),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 68,
+                                fontWeight: FontWeight.w900,
+                                height: 0.9,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              isObdLive ? 'KM / H' : 'KM / H (GPS)',
+                              style: const TextStyle(
+                                color: Color(0xFF00E5FF),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 2.0,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+
+                      // Divider Line
+                      Container(
+                        width: 2,
+                        height: 120,
+                        color: Colors.white12,
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+
+                      // Right: 4 Metrics Stack
+                      Expanded(
+                        flex: 52,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildPipMetric(
+                              label: tripMgr.isRecording ? 'JARAK' : 'RANGE',
+                              value: tripMgr.isRecording
+                                  ? '${tripMgr.distanceKm.toStringAsFixed(1)} KM'
+                                  : '185 KM',
+                              color: const Color(0xFF00FF66),
+                            ),
+                            _buildPipMetric(
+                              label: 'BBM',
+                              value: _currentFrame.speedKmh > 2
+                                  ? '${_currentFrame.instantaneousKml.toStringAsFixed(1)} km/L'
+                                  : '46.5 km/L',
+                              color: const Color(0xFFFFB300),
+                            ),
+                            _buildPipMetric(
+                              label: 'SUHU',
+                              value: isObdLive ? '${_currentFrame.ectC.toStringAsFixed(0)}°C' : '88°C',
+                              color: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF),
+                            ),
+                            _buildPipMetric(
+                              label: 'REBAH',
+                              value:
+                                  '${_currentSensor.rollAngleDeg.abs().toStringAsFixed(0)}° ${_currentSensor.rollAngleDeg < -1.5 ? 'L' : (_currentSensor.rollAngleDeg > 1.5 ? 'R' : 'CVR')}',
+                              color: const Color(0xFF7C4DFF),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-
-              Container(
-                width: 1,
-                height: 50,
-                color: Colors.white12,
-                margin: const EdgeInsets.symmetric(horizontal: 6),
-              ),
-
-              // Right: 4 Glanceable Key Metrics
-              Expanded(
-                flex: 60,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildPipPill(
-                          label: 'DTE',
-                          value: tripMgr.isRecording
-                              ? '${tripMgr.distanceKm.toStringAsFixed(1)} KM'
-                              : '185 KM',
-                          color: const Color(0xFF00FF66),
-                        ),
-                        _buildPipPill(
-                          label: 'BBM',
-                          value: _currentFrame.speedKmh > 2
-                              ? '${_currentFrame.instantaneousKml.toStringAsFixed(0)} km/L'
-                              : '46 km/L',
-                          color: const Color(0xFFFFB300),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildPipPill(
-                          label: 'ECT',
-                          value: '${_currentFrame.ectC.toStringAsFixed(0)}°C',
-                          color: isOverheat
-                              ? Colors.redAccent
-                              : const Color(0xFF00E5FF),
-                        ),
-                        _buildPipPill(
-                          label: 'LEAN',
-                          value:
-                              '${_currentSensor.rollAngleDeg.abs().toStringAsFixed(0)}° ${_currentSensor.rollAngleDeg < -2 ? 'L' : (_currentSensor.rollAngleDeg > 2 ? 'R' : '')}',
-                          color: const Color(0xFF7C4DFF),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildPipPill({
+  Widget _buildPipMetric({
     required String label,
     required String value,
     required Color color,
   }) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          '$label: ',
+          label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.4),
-            fontSize: 9,
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 12,
             fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
           ),
         ),
         Text(
           value,
           style: TextStyle(
             color: color,
-            fontSize: 10,
+            fontSize: 14,
             fontWeight: FontWeight.w900,
             fontFamily: 'monospace',
           ),

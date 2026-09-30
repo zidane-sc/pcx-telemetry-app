@@ -13,6 +13,8 @@ class _TripsScreenState extends State<TripsScreen> {
   void initState() {
     super.initState();
     TripManager().addListener(_onTripHistoryChanged);
+    // Flush any pending unsynced trips when entering the screen
+    TripManager().flushUnsyncedTrips();
   }
 
   void _onTripHistoryChanged() {
@@ -43,6 +45,26 @@ class _TripsScreenState extends State<TripsScreen> {
             letterSpacing: 1.5,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync, color: Color(0xFF00E5FF), size: 20),
+            tooltip: 'Sync ke PocketBase',
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Menyinkronkan data trip ke Cloudflare PocketBase...')),
+              );
+              await TripManager().flushUnsyncedTrips();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Color(0xFF00FF66),
+                    content: Text('Sinkronisasi selesai!'),
+                  ),
+                );
+              }
+            },
+          ),
+        ],
       ),
       body: history.isEmpty
           ? Center(
@@ -85,13 +107,37 @@ class _TripsScreenState extends State<TripsScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Trip #${history.length - index}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                'Trip #${history.length - index}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: item.synced
+                                      ? const Color(0xFF00FF66).withOpacity(0.15)
+                                      : Colors.orangeAccent.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  item.synced ? 'CLOUD SYNCED' : 'PENDING SYNC',
+                                  style: TextStyle(
+                                    color: item.synced
+                                        ? const Color(0xFF00FF66)
+                                        : Colors.orangeAccent,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           Text(
                             'Rp ${item.tripCostIdr.toStringAsFixed(0)}',
