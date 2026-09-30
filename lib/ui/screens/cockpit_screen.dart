@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import '../../core/models/telemetry_data.dart';
 import '../../core/bluetooth/obd_service.dart';
 
@@ -12,6 +13,7 @@ class CockpitScreen extends StatefulWidget {
 
 class _CockpitScreenState extends State<CockpitScreen> {
   TelemetryFrame _currentFrame = TelemetryFrame.empty();
+  String? _connectedDeviceName;
 
   @override
   void initState() {
@@ -23,12 +25,193 @@ class _CockpitScreenState extends State<CockpitScreen> {
         });
       }
     });
+
+    widget.obdService.stateStream.listen((state) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _showBluetoothPicker() async {
+    try {
+      final List<BluetoothDevice> devices =
+          await FlutterBluetoothSerial.instance.getBondedDevices();
+
+      if (!mounted) return;
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: const Color(0xFF131B2E),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'PILIH DONGLE BLUETOOTH',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (devices.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Text(
+                          'Belum ada perangkat paired.\nPairing dulu dongle Kingbolen (OBDII) di Pengaturan Bluetooth HP (PIN: 1234).',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white60, fontSize: 13),
+                        ),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: devices.length,
+                        itemBuilder: (context, index) {
+                          final dev = devices[index];
+                          final bool isObd = (dev.name ?? '').toLowerCase().contains('obd');
+
+                          return ListTile(
+                            leading: Icon(
+                              Icons.bluetooth,
+                              color: isObd ? const Color(0xFF00FF66) : const Color(0xFF00E5FF),
+                            ),
+                            title: Text(
+                              dev.name ?? 'Unknown Device',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: isObd ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                            subtitle: Text(
+                              dev.address,
+                              style: const TextStyle(color: Colors.white54, fontSize: 11),
+                            ),
+                            trailing: isObd
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00FF66).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      'RECOMMENDED',
+                                      style: TextStyle(
+                                        color: Color(0xFF00FF66),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _connectToDevice(dev);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal scan bluetooth: $e')),
+      );
+    }
+  }
+
+  void _connectToDevice(BluetoothDevice device) async {
+    setState(() {
+      _connectedDeviceName = device.name ?? device.address;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Menghubungkan ke ${device.name}...')),
+    );
+
+    final success = await widget.obdService.connect(device.address);
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF00FF66),
+          content: Text('Berhasil terhubung ke ${device.name}! ECU Ready.'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Koneksi gagal. Pastikan kontak PCX posisi ON.'),
+        ),
+      );
+    }
+  }
+
+  String _getConnectionStatusText() {
+    if (widget.obdService.isMockMode) return 'SIMULATOR MODE';
+    switch (widget.obdService.state) {
+      case ObdConnectionState.connected:
+        return _connectedDeviceName != null ? 'LIVE: $_connectedDeviceName' : 'OBD-2 CONNECTED';
+      case ObdConnectionState.connecting:
+        return 'CONNECTING...';
+      case ObdConnectionState.handshaking:
+        return 'INIT PROTOCOL (KWP)...';
+      case ObdConnectionState.error:
+        return 'CONNECTION ERROR';
+      case ObdConnectionState.disconnected:
+      default:
+        return 'DISCONNECTED';
+    }
+  }
+
+  Color _getConnectionColor() {
+    if (widget.obdService.isMockMode) return const Color(0xFF00E5FF);
+    switch (widget.obdService.state) {
+      case ObdConnectionState.connected:
+        return const Color(0xFF00FF66);
+      case ObdConnectionState.connecting:
+      case ObdConnectionState.handshaking:
+        return const Color(0xFFFFB300);
+      case ObdConnectionState.error:
+        return Colors.redAccent;
+      case ObdConnectionState.disconnected:
+      default:
+        return Colors.white38;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isOverheat = _currentFrame.ectC > 100.0;
     final bool isLowBatt = _currentFrame.batteryVoltage < 11.8;
+    final connColor = _getConnectionColor();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E17),
@@ -37,55 +220,67 @@ class _CockpitScreenState extends State<CockpitScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           child: Column(
             children: [
-              // Top Status Row
+              // Top Status Row with Bluetooth Picker
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  InkWell(
+                    onTap: _showBluetoothPicker,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: connColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _getConnectionStatusText(),
+                            style: TextStyle(
+                              color: connColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white54, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
                   Row(
                     children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: widget.obdService.state == ObdConnectionState.connected
-                              ? const Color(0xFF00FF66)
-                              : Colors.redAccent,
-                          shape: BoxShape.circle,
-                        ),
+                      IconButton(
+                        icon: const Icon(Icons.bluetooth_searching, color: Color(0xFF00E5FF), size: 20),
+                        tooltip: 'Scan OBD Bluetooth',
+                        onPressed: _showBluetoothPicker,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.obdService.isMockMode
-                            ? 'SIMULATOR MODE'
-                            : (widget.obdService.state == ObdConnectionState.connected
-                                ? 'OBD-2 LIVE'
-                                : 'DISCONNECTED'),
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.08),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        ),
+                        onPressed: () {
+                          widget.obdService.enableMockMode(!widget.obdService.isMockMode);
+                        },
+                        icon: Icon(
+                          widget.obdService.isMockMode ? Icons.cancel : Icons.play_arrow,
+                          size: 16,
+                          color: const Color(0xFF00E5FF),
+                        ),
+                        label: Text(
+                          widget.obdService.isMockMode ? 'Stop Sim' : 'Start Sim',
+                          style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 12),
                         ),
                       ),
                     ],
-                  ),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.white.withOpacity(0.08),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    ),
-                    onPressed: () {
-                      widget.obdService.enableMockMode(!widget.obdService.isMockMode);
-                    },
-                    icon: Icon(
-                      widget.obdService.isMockMode ? Icons.cancel : Icons.play_arrow,
-                      size: 16,
-                      color: const Color(0xFF00E5FF),
-                    ),
-                    label: Text(
-                      widget.obdService.isMockMode ? 'Stop Sim' : 'Start Sim',
-                      style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 12),
-                    ),
                   ),
                 ],
               ),
