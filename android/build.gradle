@@ -13,19 +13,24 @@ rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 
-    project.plugins.withId("com.android.library") {
-        if (project.android.hasProperty("namespace")) {
-            if (project.android.namespace == null || project.android.namespace.isEmpty()) {
-                if (project.name == "flutter_bluetooth_serial") {
-                    project.android.namespace = "io.github.edufolly.flutterbluetoothserial"
-                } else if (project.name == "flutter_overlay_window") {
-                    project.android.namespace = "flutter.overlay.window.flutter_overlay_window"
-                } else {
-                    def groupStr = project.group?.toString()?.trim()
-                    if (groupStr == null || groupStr.isEmpty() || groupStr == "unspecified") {
-                        project.android.namespace = "com.zidane.${project.name.replace('-', '_')}"
+    afterEvaluate { p ->
+        if (p.hasProperty("android")) {
+            def androidExt = p.extensions.findByName("android")
+            if (androidExt != null && androidExt.hasProperty("namespace")) {
+                if (androidExt.namespace == null || androidExt.namespace.isEmpty()) {
+                    if (p.name == "flutter_bluetooth_serial") {
+                        androidExt.namespace = "io.github.edufolly.flutterbluetoothserial"
+                    } else if (p.name == "flutter_overlay_window") {
+                        androidExt.namespace = "flutter.overlay.window.flutter_overlay_window"
+                    } else if (p.name == "flutter_tts") {
+                        androidExt.namespace = "com.tundralabs.fluttertts"
                     } else {
-                        project.android.namespace = groupStr
+                        def groupStr = p.group?.toString()?.trim()
+                        if (groupStr == null || groupStr.isEmpty() || groupStr == "unspecified") {
+                            androidExt.namespace = "com.zidane.${p.name.replace('-', '_')}"
+                        } else {
+                            androidExt.namespace = groupStr
+                        }
                     }
                 }
             }
