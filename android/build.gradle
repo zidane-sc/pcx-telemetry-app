@@ -11,19 +11,18 @@ allprojects {
 rootProject.buildDir = '../build'
 
 subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty('android')) {
-            project.android {
-                if (!hasProperty('namespace') || namespace == null || namespace.isEmpty()) {
-                    def defaultNamespace = project.group?.toString()?.trim()
-                    if (defaultNamespace == null || defaultNamespace.isEmpty() || defaultNamespace == "unspecified") {
-                        if (project.name == "flutter_bluetooth_serial") {
-                            defaultNamespace = "io.github.edufolly.flutterbluetoothserial"
-                        } else {
-                            defaultNamespace = "com.zidane.${project.name.replace('-', '_')}"
-                        }
+    project.plugins.withId("com.android.library") {
+        if (project.android.hasProperty("namespace")) {
+            if (project.android.namespace == null || project.android.namespace.isEmpty()) {
+                if (project.name == "flutter_bluetooth_serial") {
+                    project.android.namespace = "io.github.edufolly.flutterbluetoothserial"
+                } else {
+                    def groupStr = project.group?.toString()?.trim()
+                    if (groupStr == null || groupStr.isEmpty() || groupStr == "unspecified") {
+                        project.android.namespace = "com.zidane.${project.name.replace('-', '_')}"
+                    } else {
+                        project.android.namespace = groupStr
                     }
-                    namespace = defaultNamespace
                 }
             }
         }
@@ -33,6 +32,7 @@ subprojects {
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+
 subprojects {
     project.evaluationDependsOn(':app')
 }
