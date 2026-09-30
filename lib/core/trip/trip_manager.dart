@@ -8,6 +8,12 @@ import '../models/telemetry_data.dart';
 import '../sync/pocketbase_service.dart';
 import 'polyline_encoder.dart';
 
+class _SpeedTimeSample {
+  final DateTime time;
+  final double speedKmh;
+  const _SpeedTimeSample({required this.time, required this.speedKmh});
+}
+
 class TripRecord {
   final String id;
   final DateTime startTime;
@@ -24,6 +30,7 @@ class TripRecord {
   final double maxLeanRightDeg;
   final int hardBrakingCount;
   final String routePolyline;
+  final String timelineData; // 1 Hz JSON timeline snapshots
   final bool synced;
 
   const TripRecord({
@@ -42,6 +49,7 @@ class TripRecord {
     required this.maxLeanRightDeg,
     required this.hardBrakingCount,
     required this.routePolyline,
+    required this.timelineData,
     required this.synced,
   });
 
@@ -62,6 +70,7 @@ class TripRecord {
       maxLeanRightDeg: maxLeanRightDeg,
       hardBrakingCount: hardBrakingCount,
       routePolyline: routePolyline,
+      timelineData: timelineData,
       synced: synced ?? this.synced,
     );
   }
@@ -82,6 +91,7 @@ class TripRecord {
         'maxLeanRightDeg': maxLeanRightDeg,
         'hardBrakingCount': hardBrakingCount,
         'routePolyline': routePolyline,
+        'timelineData': timelineData,
         'synced': synced,
       };
 
@@ -101,6 +111,7 @@ class TripRecord {
         maxLeanRightDeg: (map['maxLeanRightDeg'] ?? 0.0).toDouble(),
         hardBrakingCount: map['hardBrakingCount'] ?? 0,
         routePolyline: map['routePolyline'] ?? '',
+        timelineData: map['timelineData'] ?? '[]',
         synced: map['synced'] ?? false,
       );
 }
@@ -141,9 +152,21 @@ class TripManager extends ChangeNotifier {
   int _hardBrakingCount = 0;
   int get hardBrakingCount => _hardBrakingCount;
 
+  // Running telemetry states for 1Hz timeline
+  double _latestSpeed = 0.0;
+  double _latestLean = 0.0;
+  double _latestLat = 0.0;
+  double _latestLng = 0.0;
+  double _latestAlt = 0.0;
+
+  // Hard braking tracking variables
+  final List<_SpeedTimeSample> _speedHistory = [];
+  DateTime? _lastHardBrakingTriggered;
+
   double? _prevLat;
   double? _prevLng;
   final List<List<double>> _coordinates = [];
+  final List<Map<String, dynamic>> _timelineSnapshots = [];
   final List<TripRecord> _history = [];
   List<TripRecord> get history => List.unmodifiable(_history);
 
@@ -200,10 +223,27 @@ class TripManager extends ChangeNotifier {
     _prevLat = null;
     _prevLng = null;
     _coordinates.clear();
+    _timelineSnapshots.clear();
+    _speedHistory.clear();
+    _lastHardBrakingTriggered = null;
 
+    // 1 Hz Ticker Timer: updates elapsed & records 1 Hz timeline point
     _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_startTime != null) {
+      if (_startTime != null && _isRecording) {
         _elapsed = DateTime.now().difference(_startTime!);
+
+        // Capture 1 Hz timeline snapshot
+        if (_latestLat != 0.0 && _latestLng != 0.0) {
+          _timelineSnapshots.add({
+            't': _elapsed.inSeconds,
+            'lat': double.parse(_latestLat.toStringAsFixed(5)),
+            'lng': double.parse(_latestLng.toStringAsFixed(5)),
+            'spd': _latestSpeed.round(),
+            'lean': _latestLean.round(),
+            'alt': _latestAlt.round(),
+          });
+        }
+
         notifyListeners();
       }
     });
@@ -217,23 +257,47 @@ class TripManager extends ChangeNotifier {
   }) {
     if (!_isRecording) return;
 
-    // Speed: prefer OBD if available & running, else GPS satellite speed
     final double speed = (obdFrame != null && obdFrame.speedKmh > 1.0)
         ? obdFrame.speedKmh
         : sensorData.gpsSpeedKmh;
+
+    _latestSpeed = speed;
+    _latestLean = sensorData.rollAngleDeg;
+    _latestLat = sensorData.latitude;
+    _latestLng = sensorData.longitude;
+    _latestAlt = sensorData.altitude;
 
     if (speed > _maxSpeedKmh) _maxSpeedKmh = speed;
     _speedSum += speed;
     _speedSamples++;
 
-    // Lean Angle from smartphone IMU Gyro
+    // Lean Angle peak tracking
     final double roll = sensorData.rollAngleDeg;
     if (roll < -_maxLeanLeft) _maxLeanLeft = -roll;
     if (roll > _maxLeanRight) _maxLeanRight = roll;
 
-    // Hard Braking detection (G-force < -0.45 G)
-    if (sensorData.gForce < -0.45) {
-      _hardBrakingCount++;
+    // Realistic Hard Braking Detector via Speed Differential:
+    // Drop >= 14 km/h in <= 1.2s while traveling > 18 km/h with 3.5s event cooldown
+    final now = DateTime.now();
+    _speedHistory.add(_SpeedTimeSample(time: now, speedKmh: speed));
+    _speedHistory.removeWhere(
+        (s) => now.difference(s.time).inMilliseconds > 1200);
+
+    if (_speedHistory.length >= 2 && speed > 15.0) {
+      final oldest = _speedHistory.first;
+      final speedDrop = oldest.speedKmh - speed;
+      final timeDiffSec =
+          now.difference(oldest.time).inMilliseconds / 1000.0;
+
+      if (timeDiffSec >= 0.4 && (speedDrop / timeDiffSec) >= 14.0) {
+        if (_lastHardBrakingTriggered == null ||
+            now.difference(_lastHardBrakingTriggered!).inMilliseconds > 3500) {
+          _hardBrakingCount++;
+          _lastHardBrakingTriggered = now;
+          debugPrint(
+              '[TripManager] Hard braking event #$_hardBrakingCount detected: -$speedDrop km/h in ${timeDiffSec.toStringAsFixed(1)}s');
+        }
+      }
     }
 
     // Engine Temp
@@ -250,7 +314,7 @@ class TripManager extends ChangeNotifier {
           sensorData.latitude,
           sensorData.longitude,
         );
-        // Sanity check to avoid GPS teleport glitches (> 200 m/s)
+        // Distance sanity check: ignore teleport jumps (> 200 m/s)
         if (distMeters > 1.0 && distMeters < 250.0) {
           _distanceKm += distMeters / 1000.0;
         }
@@ -279,6 +343,7 @@ class TripManager extends ChangeNotifier {
     final double tripCostIdr = fuelConsumedL * 13700.0; // Pertamax baseline
 
     final polyline = PolylineEncoder.encode(_coordinates);
+    final timelineJson = jsonEncode(_timelineSnapshots);
 
     final record = TripRecord(
       id: 'trip_${DateTime.now().millisecondsSinceEpoch}',
@@ -296,6 +361,7 @@ class TripManager extends ChangeNotifier {
       maxLeanRightDeg: _maxLeanRight,
       hardBrakingCount: _hardBrakingCount,
       routePolyline: polyline,
+      timelineData: timelineJson,
       synced: false,
     );
 
@@ -317,6 +383,13 @@ class TripManager extends ChangeNotifier {
       final trip = _history[i];
       if (!trip.synced) {
         try {
+          dynamic timelineParsed;
+          try {
+            timelineParsed = jsonDecode(trip.timelineData);
+          } catch (_) {
+            timelineParsed = [];
+          }
+
           final success = await _pbService!.syncTrip(
             startTime: trip.startTime,
             endTime: trip.endTime,
@@ -326,12 +399,13 @@ class TripManager extends ChangeNotifier {
             maxSpeedKmh: trip.maxSpeedKmh,
             fuelConsumedL: trip.fuelConsumedL,
             avgKml: trip.avgKml,
-            tripCostIdr: trip.tripCostIdr,
+            tripCostIdr: tripCostIdr,
             maxEctC: trip.maxEctC,
             maxLeanLeftDeg: trip.maxLeanLeftDeg,
             maxLeanRightDeg: trip.maxLeanRightDeg,
             hardBrakingCount: trip.hardBrakingCount,
             routePolyline: trip.routePolyline,
+            timelineData: timelineParsed,
           );
 
           if (success) {

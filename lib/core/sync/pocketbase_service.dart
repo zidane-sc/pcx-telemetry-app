@@ -149,6 +149,7 @@ class PocketBaseService {
     required double maxLeanRightDeg,
     required int hardBrakingCount,
     required String routePolyline,
+    dynamic timelineData,
   }) async {
     // Auto-authenticate & ensure vehicle exists if not ready
     if (!isAuthenticated || currentVehicleId == null) {
@@ -175,6 +176,7 @@ class PocketBaseService {
           'max_lean_right_deg': maxLeanRightDeg,
           'hard_braking_count': hardBrakingCount,
           'route_polyline': routePolyline,
+          if (timelineData != null) 'timeline_data': timelineData,
         },
       );
       return true;
