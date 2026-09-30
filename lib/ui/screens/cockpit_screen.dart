@@ -14,6 +14,7 @@ import '../../core/audio/voice_alert_service.dart';
 import '../../core/navigation/navigation_manager.dart';
 import '../navigation/search_destination_sheet.dart';
 import '../navigation/navigation_turn_banner.dart';
+import '../common/cyber_map_tiles.dart';
 
 class CockpitScreen extends StatefulWidget {
   final ObdService obdService;
@@ -677,13 +678,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       initialZoom: 16.0,
                     ),
                     children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                        fallbackUrl:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.zidane.pcx_telemetry_app',
-                      ),
+                      CyberMapTiles.buildTileLayer(),
                       PolylineLayer(
                         polylines: [
                           Polyline(
@@ -884,14 +879,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                               initialZoom: 16.0,
                             ),
                             children: [
-                              TileLayer(
-                                urlTemplate:
-                                    'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                                fallbackUrl:
-                                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName:
-                                    'com.zidane.pcx_telemetry_app',
-                              ),
+                              CyberMapTiles.buildTileLayer(),
                               PolylineLayer(
                                 polylines: [
                                   Polyline(

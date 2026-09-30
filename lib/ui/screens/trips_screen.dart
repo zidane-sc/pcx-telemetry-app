@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/trip/trip_manager.dart';
+import '../common/cyber_map_tiles.dart';
 
 class TripsScreen extends StatefulWidget {
   const TripsScreen({super.key});
@@ -118,14 +119,7 @@ class _TripsScreenState extends State<TripsScreen> {
                             initialZoom: 15.0,
                           ),
                           children: [
-                            TileLayer(
-                              urlTemplate:
-                                  'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-                              fallbackUrl:
-                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName:
-                                  'com.zidane.pcx_telemetry_app',
-                            ),
+                            CyberMapTiles.buildTileLayer(),
                             PolylineLayer(
                               polylines: [
                                 Polyline(
