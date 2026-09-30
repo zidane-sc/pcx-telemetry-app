@@ -6,6 +6,7 @@ import 'core/sensors/sensor_hub.dart';
 import 'core/sync/pocketbase_service.dart';
 import 'core/audio/voice_alert_service.dart';
 import 'core/overlay/overlay_manager.dart';
+import 'core/trip/trip_manager.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/overlay/floating_bubble_widget.dart';
 
@@ -26,8 +27,9 @@ void main() async {
   final sensorHub = SensorHub();
   final pbService = PocketBaseService();
 
-  // Initialize Voice Alert Engine
+  // Initialize Voice Alert Engine & Trip Manager
   await VoiceAlertService().init();
+  await TripManager().init(pbService: pbService);
 
   // Start background sensor monitoring
   sensorHub.start();
@@ -103,7 +105,8 @@ class _PcxTelemetryAppState extends State<PcxTelemetryApp>
     // When user minimizes app or switches to Google Maps / Waze:
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       if (widget.obdService.state == ObdConnectionState.connected ||
-          widget.obdService.isMockMode) {
+          widget.obdService.isMockMode ||
+          TripManager().isRecording) {
         OverlayManager().showFloatingOverlay(
           dteKm: 185.0,
           kml: 46.5,
@@ -134,7 +137,10 @@ class _PcxTelemetryAppState extends State<PcxTelemetryApp>
           surface: Color(0xFF131B2E),
         ),
       ),
-      home: HomeScreen(obdService: widget.obdService),
+      home: HomeScreen(
+        obdService: widget.obdService,
+        sensorHub: widget.sensorHub,
+      ),
     );
   }
 }

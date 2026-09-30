@@ -1,10 +1,34 @@
 import 'package:flutter/material.dart';
+import '../../core/trip/trip_manager.dart';
 
-class TripsScreen extends StatelessWidget {
+class TripsScreen extends StatefulWidget {
   const TripsScreen({super.key});
 
   @override
+  State<TripsScreen> createState() => _TripsScreenState();
+}
+
+class _TripsScreenState extends State<TripsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    TripManager().addListener(_onTripHistoryChanged);
+  }
+
+  void _onTripHistoryChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    TripManager().removeListener(_onTripHistoryChanged);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final history = TripManager().history;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E17),
       appBar: AppBar(
@@ -20,87 +44,91 @@ class TripsScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildTripSummaryCard(
-            date: 'Hari ini, 07:45 WIB',
-            title: 'Rumah ➔ Kantor Dealls',
-            distanceKm: 24.8,
-            durationMin: 42,
-            avgKml: 46.2,
-            fuelCostIdr: 7350,
-            maxLean: 'L 36° / R 39°',
-          ),
-          _buildTripSummaryCard(
-            date: 'Kemarin, 18:20 WIB',
-            title: 'Kantor Dealls ➔ Rumah',
-            distanceKm: 25.1,
-            durationMin: 55,
-            avgKml: 41.5,
-            fuelCostIdr: 8300,
-            maxLean: 'L 32° / R 34°',
-          ),
-          _buildTripSummaryCard(
-            date: '28 Sep 2026, 06:30 WIB',
-            title: 'Sunday Morning Ride (Sentul)',
-            distanceKm: 78.4,
-            durationMin: 110,
-            avgKml: 48.0,
-            fuelCostIdr: 22350,
-            maxLean: 'L 42° / R 43°',
-          ),
-        ],
-      ),
-    );
-  }
+      body: history.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.route, size: 48, color: Colors.white.withOpacity(0.2)),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Belum ada trip yang direkam.',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Buka tab Cockpit & tap "START TRIP" sebelum jalan.',
+                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: history.length,
+              itemBuilder: (context, index) {
+                final item = history[index];
+                final dateStr =
+                    '${item.startTime.day}/${item.startTime.month} ${item.startTime.hour.toString().padLeft(2, '0')}:${item.startTime.minute.toString().padLeft(2, '0')} WIB';
 
-  Widget _buildTripSummaryCard({
-    required String date,
-    required String title,
-    required double distanceKm,
-    required int durationMin,
-    required double avgKml,
-    required int fuelCostIdr,
-    required String maxLean,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF131B2E),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              Text(
-                'Rp ${fuelCostIdr.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}',
-                style: const TextStyle(color: Color(0xFF00FF66), fontWeight: FontWeight.w900, fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(date, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
-          const Divider(color: Colors.white10, height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildTripStat('Jarak', '${distanceKm.toStringAsFixed(1)} KM'),
-              _buildTripStat('Durasi', '$durationMin mnt'),
-              _buildTripStat('Efisiensi', '${avgKml.toStringAsFixed(1)} km/L'),
-              _buildTripStat('Rebah', maxLean),
-            ],
-          ),
-        ],
-      ),
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF131B2E),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Trip #${history.length - index}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            'Rp ${item.tripCostIdr.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              color: Color(0xFF00FF66),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        dateStr,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 11,
+                        ),
+                      ),
+                      const Divider(color: Colors.white10, height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildTripStat('Jarak', '${item.distanceKm.toStringAsFixed(1)} KM'),
+                          _buildTripStat('Durasi', '${item.durationMin.toStringAsFixed(0)} mnt'),
+                          _buildTripStat('Top Speed', '${item.maxSpeedKmh.toStringAsFixed(0)} km/h'),
+                          _buildTripStat(
+                            'Peak Rebah',
+                            'L ${item.maxLeanLeftDeg.toStringAsFixed(0)}° / R ${item.maxLeanRightDeg.toStringAsFixed(0)}°',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
     );
   }
 
@@ -108,11 +136,18 @@ class TripsScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+        Text(
+          label,
+          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+        ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
         ),
       ],
     );

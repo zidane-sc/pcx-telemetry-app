@@ -46,6 +46,15 @@ class SensorHub {
   double _currentRoll = 0.0;
   double _currentG = 0.0;
 
+  SensorHubData get latestData => SensorHubData(
+        latitude: _currentLat,
+        longitude: _currentLng,
+        altitude: _currentAlt,
+        gpsSpeedKmh: _currentGpsSpeed,
+        rollAngleDeg: _currentRoll,
+        gForce: _currentG,
+      );
+
   Future<void> start() async {
     // Start GPS stream
     try {
@@ -76,8 +85,8 @@ class SensorHub {
     // Start IMU Accelerometer stream for Lean Angle
     try {
       _accelSub = accelerometerEventStream().listen((event) {
-        // Phone mounted in landscape on motorcycle holder:
-        // Calculate roll tilt angle using arctan2(y, z) or arctan2(x, z)
+        // Phone mounted in landscape or portrait on motorcycle holder:
+        // Calculate roll tilt angle using arctan2(x, z)
         final double rollRad = atan2(event.x, event.z);
         _currentRoll = rollRad * (180.0 / pi);
 
@@ -94,16 +103,7 @@ class SensorHub {
   }
 
   void _emit() {
-    _hubController.add(
-      SensorHubData(
-        latitude: _currentLat,
-        longitude: _currentLng,
-        altitude: _currentAlt,
-        gpsSpeedKmh: _currentGpsSpeed,
-        rollAngleDeg: _currentRoll,
-        gForce: _currentG,
-      ),
-    );
+    _hubController.add(latestData);
   }
 
   void stop() {
