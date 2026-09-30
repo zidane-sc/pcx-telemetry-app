@@ -41,6 +41,9 @@ void main() async {
     // Background auto-login to PocketBase
     pbService.autoLogin();
 
+    // Enable native Picture-in-Picture when leaving to Google Maps
+    PipManager().enableAutoPipOnLeave();
+
     // Start background sensor monitoring
     sensorHub.start();
 

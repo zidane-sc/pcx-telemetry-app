@@ -15,11 +15,25 @@ class PipManager {
       final available = await _floating.isPipAvailable;
       if (!available) return false;
       final status = await _floating.enable(
-        aspectRatio: const Rational.landscape(),
+        const ImmediatePiP(
+          aspectRatio: Rational.landscape(),
+        ),
       );
       return status == PiPStatus.enabled;
     } catch (_) {
       return false;
     }
+  }
+
+  Future<void> enableAutoPipOnLeave() async {
+    try {
+      final available = await _floating.isPipAvailable;
+      if (!available) return;
+      await _floating.enable(
+        const OnLeavePiP(
+          aspectRatio: Rational.landscape(),
+        ),
+      );
+    } catch (_) {}
   }
 }
