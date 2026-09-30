@@ -399,7 +399,7 @@ class TripManager extends ChangeNotifier {
             maxSpeedKmh: trip.maxSpeedKmh,
             fuelConsumedL: trip.fuelConsumedL,
             avgKml: trip.avgKml,
-            tripCostIdr: tripCostIdr,
+            tripCostIdr: trip.tripCostIdr,
             maxEctC: trip.maxEctC,
             maxLeanLeftDeg: trip.maxLeanLeftDeg,
             maxLeanRightDeg: trip.maxLeanRightDeg,
