@@ -18,6 +18,8 @@ subprojects {
             if (project.android.namespace == null || project.android.namespace.isEmpty()) {
                 if (project.name == "flutter_bluetooth_serial") {
                     project.android.namespace = "io.github.edufolly.flutterbluetoothserial"
+                } else if (project.name == "flutter_overlay_window") {
+                    project.android.namespace = "flutter.overlay.window.flutter_overlay_window"
                 } else {
                     def groupStr = project.group?.toString()?.trim()
                     if (groupStr == null || groupStr.isEmpty() || groupStr == "unspecified") {
