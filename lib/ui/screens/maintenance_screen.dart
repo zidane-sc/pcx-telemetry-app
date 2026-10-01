@@ -144,7 +144,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
-              keyboardType: TextInputKeyBoardType.number,
+              keyboardType: TextInputType.number,
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: 'Contoh: 12500',
