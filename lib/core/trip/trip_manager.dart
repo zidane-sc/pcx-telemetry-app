@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/telemetry_data.dart';
 import '../sensors/sensor_hub.dart';
+import '../telemetry/engine_brake_detector.dart';
 import '../telemetry/lean_estimator.dart';
 import '../sync/pocketbase_service.dart';
 import 'polyline_encoder.dart';
@@ -30,6 +31,14 @@ class TripRecord {
   final double maxLeanLeftDeg;
   final double maxLeanRightDeg;
   final int hardBrakingCount;
+
+  /// Sprint 3: engine braking, counted separately from service braking so a
+  /// rider can see the split. Null-safe on read because trips recorded before
+  /// Sprint 3 have no such field — never default those to a real 0.
+  final int engineBrakingCount;
+  final int serviceBrakingCount;
+  final double engineBrakeSeconds;
+
   final String routePolyline;
   final String timelineData;
   final bool synced;
@@ -52,6 +61,9 @@ class TripRecord {
     required this.routePolyline,
     required this.timelineData,
     required this.synced,
+    this.engineBrakingCount = 0,
+    this.serviceBrakingCount = 0,
+    this.engineBrakeSeconds = 0.0,
   });
 
   TripRecord copyWith({bool? synced}) => TripRecord(
@@ -69,6 +81,9 @@ class TripRecord {
         maxLeanLeftDeg: maxLeanLeftDeg,
         maxLeanRightDeg: maxLeanRightDeg,
         hardBrakingCount: hardBrakingCount,
+        engineBrakingCount: engineBrakingCount,
+        serviceBrakingCount: serviceBrakingCount,
+        engineBrakeSeconds: engineBrakeSeconds,
         routePolyline: routePolyline,
         timelineData: timelineData,
         synced: synced ?? this.synced,
@@ -89,6 +104,9 @@ class TripRecord {
         'maxLeanLeftDeg': maxLeanLeftDeg,
         'maxLeanRightDeg': maxLeanRightDeg,
         'hardBrakingCount': hardBrakingCount,
+        'engineBrakingCount': engineBrakingCount,
+        'serviceBrakingCount': serviceBrakingCount,
+        'engineBrakeSeconds': engineBrakeSeconds,
         'routePolyline': routePolyline,
         'timelineData': timelineData,
         'synced': synced,
@@ -109,6 +127,23 @@ class TripRecord {
         maxLeanLeftDeg: (map['maxLeanLeftDeg'] ?? 0.0).toDouble(),
         maxLeanRightDeg: (map['maxLeanRightDeg'] ?? 0.0).toDouble(),
         hardBrakingCount: map['hardBrakingCount'] ?? 0,
+        // Pre-Sprint-3 trips lack these keys. Defaulting to 0 is correct here: a trip
+        // recorded before the feature existed genuinely contains zero counted
+        // events, as opposed to an unknown value.
+        //
+        // The `is num` check (rather than a cast) is deliberate: a `as num?`
+        // cast throws on a String, and fromJson is fed hand-edited and
+        // migrated JSON as well as our own. One corrupt field must not lose the
+        // entire ride record.
+        engineBrakingCount: map['engineBrakingCount'] is num
+            ? (map['engineBrakingCount'] as num).toInt()
+            : 0,
+        serviceBrakingCount: map['serviceBrakingCount'] is num
+            ? (map['serviceBrakingCount'] as num).toInt()
+            : 0,
+        engineBrakeSeconds: map['engineBrakeSeconds'] is num
+            ? (map['engineBrakeSeconds'] as num).toDouble()
+            : 0.0,
         routePolyline: map['routePolyline'] ?? '',
         timelineData: map['timelineData'] ?? '[]',
         synced: map['synced'] ?? false,
@@ -158,6 +193,14 @@ class TripManager extends ChangeNotifier {
   /// Sprint 2: full lean reading with provenance, mirrored from SensorHubData so
   /// the periodic keyframer can persist it without re-deriving anything.
   LeanReading? _latestLeanReading;
+
+  /// Sprint 3: engine braking vs service braking, classified from ECU data.
+  final EngineBrakeDetector _decelDetector = EngineBrakeDetector();
+  EngineBrakeDetector get decelDetector => _decelDetector;
+  int get engineBrakingCount => _decelDetector.engineBrakeCount;
+  int get serviceBrakingCount => _decelDetector.serviceBrakeCount;
+  double get engineBrakeSeconds => _decelDetector.engineBrakeSeconds;
+  bool get isEngineBraking => _decelDetector.isEngineBraking;
   double _latestLat = 0.0;
   double _latestLng = 0.0;
   double _latestAlt = 0.0;
@@ -230,6 +273,7 @@ class TripManager extends ChangeNotifier {
     _maxLeanRight = 0.0;
     _maxEct = 0.0;
     _hardBrakingCount = 0;
+    _decelDetector.reset();
     _prevLat = null;
     _prevLng = null;
     _coordinates.clear();
@@ -319,6 +363,21 @@ class TripManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sprint 3: classify every deceleration tick. Runs regardless of whether a
+  /// trip is recording, so the cockpit EB pill stays live outside trips.
+  void onLiveTelemetry({
+    required double speedKmh,
+    required TelemetryFrame? obdFrame,
+  }) {
+    _decelDetector.update(
+      now: DateTime.now(),
+      speedKmh: speedKmh,
+      rpm: obdFrame?.rpm ?? 0.0,
+      tpsPercent: obdFrame?.tpsPercent ?? 100.0,
+      obdConnected: obdFrame != null,
+    );
+  }
+
   void onTelemetryUpdate({
     required SensorHubData sensorData,
     TelemetryFrame? obdFrame,
@@ -348,6 +407,7 @@ class TripManager extends ChangeNotifier {
     // Realistic Hard Braking Detector via Speed Differential:
     // Drop >= 14 km/h in <= 1.2s while traveling > 18 km/h with 3.5s event cooldown
     final now = DateTime.now();
+
     _speedHistory.add(_SpeedTimeSample(time: now, speedKmh: speed));
     _speedHistory.removeWhere(
         (s) => now.difference(s.time).inMilliseconds > 1200);
@@ -458,6 +518,9 @@ class TripManager extends ChangeNotifier {
       maxLeanLeftDeg: _maxLeanLeft,
       maxLeanRightDeg: _maxLeanRight,
       hardBrakingCount: _hardBrakingCount,
+      engineBrakingCount: _decelDetector.engineBrakeCount,
+      serviceBrakingCount: _decelDetector.serviceBrakeCount,
+      engineBrakeSeconds: _decelDetector.engineBrakeSeconds,
       routePolyline: polyline,
       timelineData: timelineJson,
       synced: false,
@@ -502,6 +565,14 @@ class TripManager extends ChangeNotifier {
             maxLeanLeftDeg: trip.maxLeanLeftDeg,
             maxLeanRightDeg: trip.maxLeanRightDeg,
             hardBrakingCount: trip.hardBrakingCount,
+            // Passed as null until the PocketBase `trips` collection gains
+            // these columns — sending an unknown key fails the whole create,
+            // which would silently break trip sync for every ride. The data is
+            // safely in local SharedPreferences regardless.
+            // ponytail: migrate the collection, then pass the real values here.
+            engineBrakingCount: null,
+            serviceBrakingCount: null,
+            engineBrakeSeconds: null,
             routePolyline: trip.routePolyline,
             timelineData: timelineParsed,
           );

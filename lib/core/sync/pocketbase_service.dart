@@ -150,6 +150,15 @@ class PocketBaseService {
     required int hardBrakingCount,
     required String routePolyline,
     dynamic timelineData,
+
+    /// Sprint 3 fields. Omitted from the request body when null because the
+    /// live PocketBase `trips` collection does not carry these columns yet.
+    /// `ponytail:` add the columns to the collection, then drop the null
+    /// guards in the body below. Sending unknown keys to PocketBase fails the
+    /// whole create, so a null check is required until the migration lands.
+    int? engineBrakingCount,
+    int? serviceBrakingCount,
+    double? engineBrakeSeconds,
   }) async {
     // Auto-authenticate & ensure vehicle exists if not ready
     if (!isAuthenticated || currentVehicleId == null) {
@@ -176,6 +185,9 @@ class PocketBaseService {
           'max_lean_right_deg': maxLeanRightDeg,
           'hard_braking_count': hardBrakingCount,
           'route_polyline': routePolyline,
+          if (engineBrakingCount != null) 'engine_braking_count': engineBrakingCount,
+          if (serviceBrakingCount != null) 'service_braking_count': serviceBrakingCount,
+          if (engineBrakeSeconds != null) 'engine_brake_seconds': engineBrakeSeconds,
           if (timelineData != null) 'timeline_data': timelineData,
         },
       );

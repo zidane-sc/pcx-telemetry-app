@@ -72,11 +72,20 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
       _checkAutoStartTrigger(sensorData.gpsSpeedKmh);
 
-      // Update 0-60 km/h Drag Performance Box
+      // Update 0-60 km/h Drag Performance box
       final double currentSpeed = widget.obdService.state == ObdConnectionState.connected
           ? _currentFrame.speedKmh
           : sensorData.gpsSpeedKmh;
       PerformanceBox().onSpeedUpdate(currentSpeed);
+
+      // Sprint 3: classify deceleration live, outside trip recording, so the
+      // EB pill is meaningful whether or not a trip is running.
+      TripManager().onLiveTelemetry(
+        speedKmh: currentSpeed,
+        obdFrame: widget.obdService.state == ObdConnectionState.connected
+            ? _currentFrame
+            : null,
+      );
 
       // Check audio safety limits (lean limit, speed limit, overheat, low battery)
       // Sprint 1: telemetry thresholds now live in the Trigger→Action rule engine.
@@ -1099,10 +1108,31 @@ class _CockpitScreenState extends State<CockpitScreen> {
         const Spacer(),
 
         // Center: Discreet Warning Lights (Only appears if something is wrong!)
-        if (isOverheat || isLowBatt)
+        if (isOverheat || isLowBatt || TripManager().isEngineBraking)
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Sprint 3: engine braking is a technique indicator, not a fault.
+              // Amber, not red — a rider downshifting on a twisty road is doing
+              // it right, and a red pill would train them to ignore it.
+              if (TripManager().isEngineBraking)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.amber, width: 0.8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.trending_down, color: Colors.amber, size: 12),
+                      SizedBox(width: 4),
+                      Text('EB', style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              if ((isOverheat || isLowBatt) && TripManager().isEngineBraking)
+                const SizedBox(width: 6),
               if (isOverheat)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

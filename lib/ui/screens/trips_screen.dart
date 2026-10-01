@@ -240,12 +240,92 @@ class _TripsScreenState extends State<TripsScreen> {
                             _buildTripStat('Peak Rebah', 'L${item.maxLeanLeftDeg.toStringAsFixed(0)}° / R${item.maxLeanRightDeg.toStringAsFixed(0)}°'),
                           ],
                         ),
+
+                        // Sprint 3: brake split. The whole point of classifying
+                        // engine braking separately is that a rider can see it —
+                        // "you used the engine 12 times, the brakes 3" is a
+                        // technique conversation a combined count cannot start.
+                        if (item.engineBrakingCount > 0 ||
+                            item.serviceBrakingCount > 0) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              _buildDecelBadge(
+                                label: 'ENGINE BRAKE',
+                                count: item.engineBrakingCount,
+                                seconds: item.engineBrakeSeconds,
+                                color: Colors.amber,
+                                icon: Icons.trending_down,
+                              ),
+                              const SizedBox(width: 8),
+                              _buildDecelBadge(
+                                label: 'REM BRAKE',
+                                count: item.serviceBrakingCount,
+                                color: const Color(0xFFFF5252),
+                                icon: Icons.speed,
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 );
               },
             ),
+    );
+  }
+
+  /// Sprint 3 badge for one deceleration class.
+  Widget _buildDecelBadge({
+    required String label,
+    required int count,
+    required Color color,
+    required IconData icon,
+    double? seconds,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.35), width: 0.8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: color.withOpacity(0.85),
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                  Text(
+                    seconds != null && seconds > 0
+                        ? '$count× · ${seconds.toStringAsFixed(1)}s'
+                        : '$count×',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
