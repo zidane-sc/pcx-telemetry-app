@@ -268,13 +268,16 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
   final MapController _mapController = MapController();
   List<Map<String, dynamic>> _points = [];
   List<LatLng> _mapPoints = [];
-  int _scrubberIndex = 0;
+
+  // Continuous 60 FPS sub-pixel scrubber progress (0.0 to points.length - 1)
+  double _scrubProgress = 0.0;
   bool _isPlaying = false;
+  bool _followBike = true;
+  bool _courseUp = false; // Course-up vs North-up in playback
   int _speedMultiplier = 2; // 1x, 2x, 5x, 10x, 20x
   Timer? _playbackTimer;
 
   int _movingSeconds = 0;
-  int _idleSeconds = 0;
   int _peakSpeedIndex = 0;
   int _peakLeanLeftIndex = 0;
   int _peakLeanRightIndex = 0;
@@ -318,7 +321,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
       }
     }
 
-    // Calculate moving vs idle time & find peak events
+    // Calculate moving time & peak events
     int maxSpd = 0;
     int maxLeft = 0;
     int maxRight = 0;
@@ -330,8 +333,6 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
 
       if (spd >= 2) {
         _movingSeconds += (i > 0) ? (((p['t'] ?? i) - (_points[i - 1]['t'] ?? (i - 1))) as int).clamp(1, 30) : 1;
-      } else {
-        _idleSeconds += (i > 0) ? (((p['t'] ?? i) - (_points[i - 1]['t'] ?? (i - 1))) as int).clamp(1, 30) : 1;
       }
 
       if (spd > maxSpd) {
@@ -353,6 +354,15 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
   void dispose() {
     _playbackTimer?.cancel();
     super.dispose();
+  }
+
+  double _calculateBearing(LatLng from, LatLng to) {
+    final lat1 = from.latitudeInRad;
+    final lat2 = to.latitudeInRad;
+    final dLng = to.longitudeInRad - from.longitudeInRad;
+    final y = sin(dLng) * cos(lat2);
+    final x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLng);
+    return (atan2(y, x) * (180.0 / pi) + 360.0) % 360.0;
   }
 
   void _cycleSpeed() {
@@ -378,19 +388,32 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
   void _startTimer() {
     _playbackTimer?.cancel();
 
-    // High performance stepped playback
-    final int step = (_speedMultiplier >= 10) ? (_speedMultiplier ~/ 5) : 1;
-    final int intervalMs = (_speedMultiplier <= 5) ? (200 ~/ _speedMultiplier).clamp(40, 200) : 40;
+    // 30 FPS continuous sub-pixel interpolation loop (every 33ms)
+    _playbackTimer = Timer.periodic(const Duration(milliseconds: 33), (timer) {
+      if (_mapPoints.length < 2) {
+        timer.cancel();
+        return;
+      }
 
-    _playbackTimer = Timer.periodic(Duration(milliseconds: intervalMs), (timer) {
-      if (_scrubberIndex + step < _mapPoints.length) {
+      // Smooth progression rate: advances through keyframes proportionally
+      final double step = 0.033 * _speedMultiplier * 2.5;
+
+      if (_scrubProgress + step < _mapPoints.length - 1) {
         setState(() {
-          _scrubberIndex += step;
+          _scrubProgress += step;
         });
-        _mapController.move(_mapPoints[_scrubberIndex], _mapController.camera.zoom);
+
+        if (_followBike) {
+          final pos = _getInterpolatedPosition();
+          final bearing = _getInterpolatedBearing();
+          _mapController.move(pos, _mapController.camera.zoom);
+          if (_courseUp) {
+            _mapController.rotate(-bearing);
+          }
+        }
       } else {
         setState(() {
-          _scrubberIndex = _mapPoints.length - 1;
+          _scrubProgress = (_mapPoints.length - 1).toDouble();
           _isPlaying = false;
         });
         timer.cancel();
@@ -405,8 +428,8 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
       _playbackTimer?.cancel();
       setState(() => _isPlaying = false);
     } else {
-      if (_scrubberIndex >= _mapPoints.length - 1) {
-        _scrubberIndex = 0;
+      if (_scrubProgress >= _mapPoints.length - 1.05) {
+        _scrubProgress = 0.0;
       }
       setState(() => _isPlaying = true);
       _startTimer();
@@ -419,11 +442,47 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
       _playbackTimer?.cancel();
       setState(() => _isPlaying = false);
     }
-    final idx = val.round().clamp(0, _mapPoints.length - 1);
+
+    final double clampedVal = val.clamp(0.0, (_mapPoints.length - 1).toDouble());
     setState(() {
-      _scrubberIndex = idx;
+      _scrubProgress = clampedVal;
     });
-    _mapController.move(_mapPoints[idx], _mapController.camera.zoom);
+
+    final pos = _getInterpolatedPosition();
+    final bearing = _getInterpolatedBearing();
+    _mapController.move(pos, _mapController.camera.zoom);
+    if (_courseUp) {
+      _mapController.rotate(-bearing);
+    }
+  }
+
+  LatLng _getInterpolatedPosition() {
+    if (_mapPoints.isEmpty) return const LatLng(-6.2088, 106.8456);
+    if (_mapPoints.length == 1) return _mapPoints.first;
+
+    final int baseIdx = _scrubProgress.floor().clamp(0, _mapPoints.length - 1);
+    final int nextIdx = (baseIdx + 1).clamp(0, _mapPoints.length - 1);
+    final double t = _scrubProgress - baseIdx;
+
+    if (baseIdx == nextIdx) return _mapPoints[baseIdx];
+
+    return LatLng(
+      _mapPoints[baseIdx].latitude + (_mapPoints[nextIdx].latitude - _mapPoints[baseIdx].latitude) * t,
+      _mapPoints[baseIdx].longitude + (_mapPoints[nextIdx].longitude - _mapPoints[baseIdx].longitude) * t,
+    );
+  }
+
+  double _getInterpolatedBearing() {
+    if (_mapPoints.length < 2) return 0.0;
+    final int baseIdx = _scrubProgress.floor().clamp(0, _mapPoints.length - 1);
+    final int nextIdx = (baseIdx + 1).clamp(0, _mapPoints.length - 1);
+
+    if (baseIdx < nextIdx) {
+      return _calculateBearing(_mapPoints[baseIdx], _mapPoints[nextIdx]);
+    } else if (baseIdx > 0) {
+      return _calculateBearing(_mapPoints[baseIdx - 1], _mapPoints[baseIdx]);
+    }
+    return 0.0;
   }
 
   List<Polyline> _buildSpeedColoredPolylines() {
@@ -461,15 +520,24 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
         ? _mapPoints[_mapPoints.length ~/ 2]
         : const LatLng(-6.2088, 106.8456);
 
-    final currentSnapshot = (_points.isNotEmpty && _scrubberIndex < _points.length)
-        ? _points[_scrubberIndex]
+    final int activeIdx = _scrubProgress.round().clamp(0, max(0, _points.length - 1));
+    final currentSnapshot = (_points.isNotEmpty && activeIdx < _points.length)
+        ? _points[activeIdx]
         : null;
 
     final currentSpd = currentSnapshot?['spd'] ?? 0;
     final currentLean = currentSnapshot?['lean'] ?? 0;
     final currentAlt = currentSnapshot?['alt'] ?? 0;
-    final currentSec = currentSnapshot?['t'] ?? _scrubberIndex;
+    final currentSec = currentSnapshot?['t'] ?? activeIdx;
     final totalSec = _points.isNotEmpty ? (_points.last['t'] ?? _points.length) : 0;
+
+    final currentPos = _getInterpolatedPosition();
+    final currentBearing = _getInterpolatedBearing();
+
+    // Bearing rotation angle for motorcycle arrow
+    // In North Up: arrow rotates by currentBearing to point down the road
+    // In Course Up: map rotates by -currentBearing, arrow points straight up (0.0 rad)
+    final double markerArrowRad = _courseUp ? 0.0 : (currentBearing * (pi / 180.0));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.92,
@@ -499,7 +567,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${_mapPoints.length} Keyframe Terkompresi (${_formatSeconds(_movingSeconds)} bergerak)',
+                      '${_mapPoints.length} Titik Rute (${_formatSeconds(_movingSeconds)} bergerak) • Heading: ${currentBearing.toStringAsFixed(0)}°',
                       style: const TextStyle(color: Color(0xFF00FF66), fontSize: 10),
                     ),
                   ],
@@ -512,7 +580,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
             ),
             const SizedBox(height: 8),
 
-            // Interactive Heatmap Map with Markers
+            // Interactive Heatmap Map with Rotating Directional Marker
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: SizedBox(
@@ -528,83 +596,166 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                           ),
                         ),
                       )
-                    : FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: centerPoint,
-                          initialZoom: 15.0,
-                        ),
+                    : Stack(
                         children: [
-                          CyberMapTiles.buildTileLayer(),
+                          FlutterMap(
+                            mapController: _mapController,
+                            options: MapOptions(
+                              initialCenter: centerPoint,
+                              initialZoom: 15.0,
+                              onPositionChanged: (pos, hasGesture) {
+                                if (hasGesture && _followBike) {
+                                  setState(() => _followBike = false);
+                                }
+                              },
+                            ),
+                            children: [
+                              CyberMapTiles.buildTileLayer(),
 
-                          // Speed-Colored Route Heatmap
-                          PolylineLayer(
-                            polylines: _buildSpeedColoredPolylines(),
+                              // Speed-Colored Route Heatmap
+                              PolylineLayer(
+                                polylines: _buildSpeedColoredPolylines(),
+                              ),
+
+                              MarkerLayer(
+                                markers: [
+                                  // Start Point Marker
+                                  Marker(
+                                    point: _mapPoints.first,
+                                    width: 22,
+                                    height: 22,
+                                    child: const Icon(
+                                      Icons.play_circle_fill,
+                                      color: Color(0xFF00FF66),
+                                      size: 20,
+                                    ),
+                                  ),
+                                  // Finish Point Marker
+                                  Marker(
+                                    point: _mapPoints.last,
+                                    width: 22,
+                                    height: 22,
+                                    child: const Icon(
+                                      Icons.flag_circle,
+                                      color: Colors.redAccent,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  // Top Speed Location Marker
+                                  if (_peakSpeedIndex > 0 && _peakSpeedIndex < _mapPoints.length)
+                                    Marker(
+                                      point: _mapPoints[_peakSpeedIndex],
+                                      width: 24,
+                                      height: 24,
+                                      child: const Icon(
+                                        Icons.bolt,
+                                        color: Color(0xFF7C4DFF),
+                                        size: 20,
+                                      ),
+                                    ),
+                                  // 60 FPS Smooth Moving Directional Motorcycle Marker (Rotating to face the road!)
+                                  Marker(
+                                    point: currentPos,
+                                    width: 36,
+                                    height: 36,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: const Color(0xFFFFB300).withOpacity(0.3),
+                                            border: Border.all(color: const Color(0xFFFFB300), width: 2),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFFFFB300).withOpacity(0.4),
+                                                blurRadius: 6,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Transform.rotate(
+                                          angle: markerArrowRad,
+                                          child: const Icon(
+                                            Icons.navigation,
+                                            color: Colors.white,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
 
-                          MarkerLayer(
-                            markers: [
-                              // Start Point Marker
-                              Marker(
-                                point: _mapPoints.first,
-                                width: 22,
-                                height: 22,
-                                child: const Icon(
-                                  Icons.play_circle_fill,
-                                  color: Color(0xFF00FF66),
-                                  size: 20,
-                                ),
-                              ),
-                              // Finish Point Marker
-                              Marker(
-                                point: _mapPoints.last,
-                                width: 22,
-                                height: 22,
-                                child: const Icon(
-                                  Icons.flag_circle,
-                                  color: Colors.redAccent,
-                                  size: 20,
-                                ),
-                              ),
-                              // Top Speed Location Marker
-                              if (_peakSpeedIndex > 0 && _peakSpeedIndex < _mapPoints.length)
-                                Marker(
-                                  point: _mapPoints[_peakSpeedIndex],
-                                  width: 24,
-                                  height: 24,
-                                  child: const Icon(
-                                    Icons.bolt,
-                                    color: Color(0xFF7C4DFF),
-                                    size: 20,
+                          // Map Controls: Follow & Course-Up Toggle
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Column(
+                              children: [
+                                // Follow Toggle
+                                InkWell(
+                                  onTap: () {
+                                    setState(() => _followBike = true);
+                                    _mapController.move(currentPos, _mapController.camera.zoom);
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    width: 30,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF131B2E).withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: _followBike ? const Color(0xFF00FF66) : Colors.white12,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.my_location,
+                                      size: 15,
+                                      color: _followBike ? const Color(0xFF00FF66) : Colors.white60,
+                                    ),
                                   ),
                                 ),
-                              // Active Scrubber Bike Marker
-                              if (_scrubberIndex < _mapPoints.length)
-                                Marker(
-                                  point: _mapPoints[_scrubberIndex],
-                                  width: 32,
-                                  height: 32,
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Container(
-                                        width: 28,
-                                        height: 28,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: const Color(0xFFFFB300).withOpacity(0.35),
-                                          border: Border.all(color: const Color(0xFFFFB300), width: 2),
-                                        ),
+                                const SizedBox(height: 6),
+
+                                // Course-Up / Road Heading Mode Toggle
+                                InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _courseUp = !_courseUp;
+                                      if (!_courseUp) {
+                                        _mapController.rotate(0.0);
+                                      } else {
+                                        _mapController.rotate(-currentBearing);
+                                      }
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    width: 30,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF131B2E).withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: _courseUp ? const Color(0xFF00FF66) : const Color(0xFF00E5FF),
                                       ),
-                                      const Icon(
-                                        Icons.navigation,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                    ],
+                                    ),
+                                    child: Icon(
+                                      _courseUp ? Icons.navigation : Icons.explore,
+                                      size: 15,
+                                      color: _courseUp ? const Color(0xFF00FF66) : const Color(0xFF00E5FF),
+                                    ),
                                   ),
                                 ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -637,7 +788,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                   child: CustomPaint(
                     painter: _SpeedSparklinePainter(
                       points: _points,
-                      activeIndex: _scrubberIndex,
+                      activeIndex: activeIdx,
                       maxSpeed: widget.item.maxSpeedKmh > 0 ? widget.item.maxSpeedKmh : 80.0,
                     ),
                   ),
@@ -701,7 +852,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                           thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                         ),
                         child: Slider(
-                          value: _scrubberIndex.toDouble(),
+                          value: _scrubProgress.clamp(0.0, (_mapPoints.length - 1).toDouble()),
                           min: 0,
                           max: (_mapPoints.length - 1).toDouble(),
                           onChanged: _onScrubChanged,

@@ -25,7 +25,7 @@ class CockpitMapView extends StatefulWidget {
 class _CockpitMapViewState extends State<CockpitMapView> {
   final MapController _mapController = MapController();
   bool _followMotorcycle = true;
-  bool _courseUp = false; // False = North Up, True = Course Up (rotates with bike heading)
+  bool _courseUp = true; // Default to Course Up (Auto follows road/bike heading)
 
   @override
   void didUpdateWidget(covariant CockpitMapView oldWidget) {
@@ -40,8 +40,8 @@ class _CockpitMapViewState extends State<CockpitMapView> {
         _mapController.move(motorPos, _mapController.camera.zoom);
       }
 
-      // Rotate map smoothly in Course Up mode when bike is moving
-      if (_courseUp && widget.sensorData.gpsSpeedKmh > 2.0) {
+      // Rotate map smoothly in Course Up mode following vehicle heading
+      if (_courseUp && widget.sensorData.headingDeg >= 0.0) {
         _mapController.rotate(-widget.sensorData.headingDeg);
       }
     }
@@ -52,7 +52,7 @@ class _CockpitMapViewState extends State<CockpitMapView> {
       _courseUp = !_courseUp;
       if (!_courseUp) {
         _mapController.rotate(0.0); // Reset to North Up
-      } else if (widget.sensorData.headingDeg >= 0) {
+      } else if (widget.sensorData.headingDeg >= 0.0) {
         _mapController.rotate(-widget.sensorData.headingDeg);
       }
     });
@@ -85,6 +85,9 @@ class _CockpitMapViewState extends State<CockpitMapView> {
         LatLng(widget.sensorData.latitude, widget.sensorData.longitude),
         16.5,
       );
+      if (_courseUp && widget.sensorData.headingDeg >= 0.0) {
+        _mapController.rotate(-widget.sensorData.headingDeg);
+      }
     }
   }
 
@@ -130,7 +133,10 @@ class _CockpitMapViewState extends State<CockpitMapView> {
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: motorPos,
-                initialZoom: 16.0,
+                initialZoom: 16.5,
+                initialRotation: _courseUp && widget.sensorData.headingDeg >= 0.0
+                    ? -widget.sensorData.headingDeg
+                    : 0.0,
                 onPositionChanged: (pos, hasGesture) {
                   if (hasGesture && _followMotorcycle) {
                     setState(() => _followMotorcycle = false);
