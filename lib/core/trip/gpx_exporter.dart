@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'polyline_encoder.dart';
 import 'trip_manager.dart';
 

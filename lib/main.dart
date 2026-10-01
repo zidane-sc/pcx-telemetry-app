@@ -7,6 +7,7 @@ import 'core/bluetooth/obd_service.dart';
 import 'core/sensors/sensor_hub.dart';
 import 'core/sync/pocketbase_service.dart';
 import 'core/audio/voice_alert_service.dart';
+import 'core/rules/rule_service.dart';
 import 'core/trip/trip_manager.dart';
 import 'core/logger/app_logger.dart';
 import 'core/pip/pip_manager.dart';
@@ -56,14 +57,12 @@ void main() async {
     // Start background sensor monitoring
     sensorHub.start();
 
-    // Wire telemetry frames to TTS Voice Alert Engine
-    obdService.telemetryStream.listen((frame) {
-      VoiceAlertService().checkTelemetryThresholds(
-        ectC: frame.ectC,
-        batteryVoltage: frame.batteryVoltage,
-        dteKm: 185.0,
-      );
-    });
+    // Sprint 1: telemetry thresholds are evaluated by the Trigger→Action rule
+    // engine (lib/core/rules/). The old `checkTelemetryThresholds` call here
+    // was dead — it required isObdConnected, which was never passed, so the
+    // early-return killed it. It also hard-coded dteKm: 185.0, an invented
+    // number that could never reflect the real tank.
+    await RuleService().init();
 
     runApp(PcxTelemetryApp(
       obdService: obdService,

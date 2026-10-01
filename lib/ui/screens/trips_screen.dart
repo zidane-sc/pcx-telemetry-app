@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
-import '../../core/constants/api_constants.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/trip/polyline_encoder.dart';
 import '../common/cyber_map_tiles.dart';

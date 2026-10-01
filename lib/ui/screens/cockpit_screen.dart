@@ -11,6 +11,8 @@ import '../../core/trip/trip_manager.dart';
 import '../../core/sync/pocketbase_service.dart';
 import '../../core/pip/pip_manager.dart';
 import '../../core/audio/voice_alert_service.dart';
+import '../../core/rules/rule_service.dart';
+import '../../core/rules/trigger_rule.dart';
 import '../../core/navigation/navigation_manager.dart';
 import '../../core/vehicle/vehicle_manager.dart';
 import '../../core/telemetry/performance_box.dart';
@@ -77,13 +79,17 @@ class _CockpitScreenState extends State<CockpitScreen> {
       PerformanceBox().onSpeedUpdate(currentSpeed);
 
       // Check audio safety limits (lean limit, speed limit, overheat, low battery)
-      final activeVeh = VehicleManager().activeVehicle;
-      VoiceAlertService().checkSafetyLimits(
-        speedKmh: currentSpeed,
-        leanAngleDeg: sensorData.rollAngleDeg,
-        ectC: _currentFrame.ectC,
-        batteryVoltage: _currentFrame.batteryVoltage,
-        isBike: activeVeh.hasLeanSensor,
+      // Sprint 1: telemetry thresholds now live in the Trigger→Action rule engine.
+      // It applies hold-time hysteresis and cooldown, so a value hovering at the
+      // threshold cannot machine-gun the speaker.
+      RuleService().onTelemetry(
+        RuleContext(
+          frame: _currentFrame,
+          sensor: sensorData,
+          obdConnected: widget.obdService.state == ObdConnectionState.connected,
+          isBike: VehicleManager().activeVehicle.hasLeanSensor,
+          dteKm: null, // real DTE needs fill-to-full history — see Sprint 5
+        ),
       );
 
       if (NavigationManager().isNavigating) {

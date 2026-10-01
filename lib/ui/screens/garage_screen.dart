@@ -6,8 +6,10 @@ import '../../core/sync/pocketbase_service.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/vehicle/vehicle_manager.dart';
 import '../../core/map/offline_map_downloader.dart';
+import '../../core/rules/rule_service.dart';
 import '../vehicle/vehicle_picker_sheet.dart';
 import '../garage/fuel_log_sheet.dart';
+import '../garage/rule_editor_sheet.dart';
 
 class GarageScreen extends StatefulWidget {
   final ObdService obdService;
@@ -566,6 +568,63 @@ class _GarageScreenState extends State<GarageScreen> {
           const SizedBox(height: 18),
 
           // 2. Pre-Ride Checklist Section Header
+          _buildSectionHeader('ATURAN PERINGATAN (TRIGGER → ACTION)', Icons.tune),
+
+          const SizedBox(height: 8),
+
+          Builder(
+            builder: (context) {
+              final enabledCount = RuleService()
+                  .rules
+                  .where((r) => r.enabled)
+                  .length;
+              return InkWell(
+                onTap: () => RuleEditorSheet.show(context),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0C1017),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.notifications_active,
+                          color: Color(0xFF00E5FF), size: 18),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Atur Ambang Peringatan',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$enabledCount dari ${RuleService().rules.length} aturan aktif',
+                              style: const TextStyle(
+                                  color: Colors.white38, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right,
+                          color: Colors.white30, size: 20),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 20),
+
           _buildSectionHeader('DIAGNOSA SEBELUM JALAN (PRE-FLIGHT)', Icons.checklist_rtl),
           const SizedBox(height: 8),
 
