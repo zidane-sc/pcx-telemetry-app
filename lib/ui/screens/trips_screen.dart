@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../core/constants/api_constants.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/trip/polyline_encoder.dart';
 import '../common/cyber_map_tiles.dart';
@@ -35,7 +37,7 @@ class _TripsScreenState extends State<TripsScreen> {
   void _showTimelineDetails(TripRecord item) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF131B2E),
+      backgroundColor: const Color(0xFF0F172A),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -49,33 +51,48 @@ class _TripsScreenState extends State<TripsScreen> {
     final history = TripManager().history;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E17),
+      backgroundColor: const Color(0xFF080B11),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'RIWAYAT TRIP & BIAYA',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-          ),
+        title: Row(
+          children: const [
+            Icon(Icons.route, color: Color(0xFF00E5FF), size: 22),
+            SizedBox(width: 8),
+            Text(
+              'JOURNAL & RIWAYAT TRIP',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.sync, color: Color(0xFF00E5FF), size: 20),
+            icon: const Icon(Icons.sync, color: Color(0xFF00FF66), size: 20),
             tooltip: 'Sync ke PocketBase',
             onPressed: () async {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Menyinkronkan data trip ke Cloudflare PocketBase...')),
+                const SnackBar(
+                  content: Text('Menyinkronkan data trip ke Cloudflare PocketBase...'),
+                  duration: Duration(seconds: 2),
+                ),
               );
               await TripManager().flushUnsyncedTrips();
               if (mounted) {
+                final anyUnsynced = TripManager().history.any((t) => !t.synced);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: Color(0xFF00FF66),
-                    content: Text('Sinkronisasi selesai!'),
+                  SnackBar(
+                    backgroundColor: anyUnsynced ? Colors.orangeAccent : const Color(0xFF00FF66),
+                    content: Text(
+                      anyUnsynced
+                          ? 'Sebagian trip belum ter-upload (koneksi offline). Tersimpan aman di HP.'
+                          : 'Semua trip berhasil disinkronkan ke server!',
+                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 );
               }
@@ -88,7 +105,7 @@ class _TripsScreenState extends State<TripsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.route, size: 48, color: Colors.white.withOpacity(0.2)),
+                  Icon(Icons.route, size: 48, color: Colors.white.withOpacity(0.15)),
                   const SizedBox(height: 12),
                   const Text(
                     'Belum ada trip yang direkam.',
@@ -96,14 +113,14 @@ class _TripsScreenState extends State<TripsScreen> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Buka tab Cockpit & tap "START TRIP" sebelum jalan.',
+                    'Buka tab KOKPIT & tap "START TRIP" sebelum jalan.',
                     style: TextStyle(color: Colors.white38, fontSize: 11),
                   ),
                 ],
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               itemCount: history.length,
               itemBuilder: (context, index) {
                 final item = history[index];
@@ -114,10 +131,10 @@ class _TripsScreenState extends State<TripsScreen> {
                   onTap: () => _showTimelineDetails(item),
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 14),
+                    margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF131B2E),
+                      color: const Color(0xFF0C1017),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: Colors.white.withOpacity(0.06)),
                     ),
@@ -176,28 +193,34 @@ class _TripsScreenState extends State<TripsScreen> {
                             Text(
                               dateStr,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.5),
+                                color: Colors.white.withOpacity(0.4),
                                 fontSize: 11,
                               ),
                             ),
-                            Text(
-                              'Interactive Playback ➔',
-                              style: TextStyle(
-                                color: const Color(0xFF00E5FF).withOpacity(0.7),
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            Row(
+                              children: const [
+                                Text(
+                                  'Buka Playback Telemetri',
+                                  style: TextStyle(
+                                    color: Color(0xFF00E5FF),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(width: 2),
+                                Icon(Icons.arrow_forward_ios, color: Color(0xFF00E5FF), size: 10),
+                              ],
                             ),
                           ],
                         ),
-                        const Divider(color: Colors.white10, height: 20),
+                        const Divider(color: Colors.white10, height: 18),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            _buildTripStat('Jarak', '${item.distanceKm.toStringAsFixed(1)} KM'),
+                            _buildTripStat('Jarak Tempuh', '${item.distanceKm.toStringAsFixed(1)} KM'),
                             _buildTripStat('Durasi', '${item.durationMin.toStringAsFixed(0)} mnt'),
                             _buildTripStat('Top Speed', '${item.maxSpeedKmh.toStringAsFixed(0)} km/h'),
-                            _buildTripStat('Rem Keras', '${item.hardBrakingCount}x'),
+                            _buildTripStat('Peak Rebah', 'L${item.maxLeanLeftDeg.toStringAsFixed(0)}° / R${item.maxLeanRightDeg.toStringAsFixed(0)}°'),
                           ],
                         ),
                       ],
@@ -215,7 +238,7 @@ class _TripsScreenState extends State<TripsScreen> {
       children: [
         Text(
           label,
-          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9),
         ),
         const SizedBox(height: 2),
         Text(
@@ -223,7 +246,8 @@ class _TripsScreenState extends State<TripsScreen> {
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 12,
+            fontSize: 11,
+            fontFamily: 'monospace',
           ),
         ),
       ],
@@ -246,8 +270,14 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
   List<LatLng> _mapPoints = [];
   int _scrubberIndex = 0;
   bool _isPlaying = false;
-  int _speedMultiplier = 2; // 1x, 2x, 4x
+  int _speedMultiplier = 2; // 1x, 2x, 5x, 10x, 20x
   Timer? _playbackTimer;
+
+  int _movingSeconds = 0;
+  int _idleSeconds = 0;
+  int _peakSpeedIndex = 0;
+  int _peakLeanLeftIndex = 0;
+  int _peakLeanRightIndex = 0;
 
   @override
   void initState() {
@@ -269,7 +299,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
       _mapPoints = [];
     }
 
-    // Resilient fallback for legacy trips: decode polyline if 1Hz timeline was empty
+    // Resilient fallback for legacy trips: decode polyline if timeline was empty
     if (_mapPoints.isEmpty && widget.item.routePolyline.isNotEmpty) {
       final pts = PolylineEncoder.decode(widget.item.routePolyline);
       for (int i = 0; i < pts.length; i++) {
@@ -282,8 +312,39 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
             'lng': p[1],
             'spd': widget.item.avgSpeedKmh.round(),
             'lean': 0,
+            'alt': 0,
           });
         }
+      }
+    }
+
+    // Calculate moving vs idle time & find peak events
+    int maxSpd = 0;
+    int maxLeft = 0;
+    int maxRight = 0;
+
+    for (int i = 0; i < _points.length; i++) {
+      final p = _points[i];
+      final spd = (p['spd'] as num?)?.toInt() ?? 0;
+      final lean = (p['lean'] as num?)?.toInt() ?? 0;
+
+      if (spd >= 2) {
+        _movingSeconds += (i > 0) ? (((p['t'] ?? i) - (_points[i - 1]['t'] ?? (i - 1))) as int).clamp(1, 30) : 1;
+      } else {
+        _idleSeconds += (i > 0) ? (((p['t'] ?? i) - (_points[i - 1]['t'] ?? (i - 1))) as int).clamp(1, 30) : 1;
+      }
+
+      if (spd > maxSpd) {
+        maxSpd = spd;
+        _peakSpeedIndex = i;
+      }
+      if (lean < -maxLeft) {
+        maxLeft = -lean;
+        _peakLeanLeftIndex = i;
+      }
+      if (lean > maxRight) {
+        maxRight = lean;
+        _peakLeanRightIndex = i;
       }
     }
   }
@@ -299,7 +360,11 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
       if (_speedMultiplier == 1) {
         _speedMultiplier = 2;
       } else if (_speedMultiplier == 2) {
-        _speedMultiplier = 4;
+        _speedMultiplier = 5;
+      } else if (_speedMultiplier == 5) {
+        _speedMultiplier = 10;
+      } else if (_speedMultiplier == 10) {
+        _speedMultiplier = 20;
       } else {
         _speedMultiplier = 1;
       }
@@ -312,17 +377,23 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
 
   void _startTimer() {
     _playbackTimer?.cancel();
-    final intervalMs = (300 ~/ _speedMultiplier).clamp(50, 400);
+
+    // High performance stepped playback
+    final int step = (_speedMultiplier >= 10) ? (_speedMultiplier ~/ 5) : 1;
+    final int intervalMs = (_speedMultiplier <= 5) ? (200 ~/ _speedMultiplier).clamp(40, 200) : 40;
 
     _playbackTimer = Timer.periodic(Duration(milliseconds: intervalMs), (timer) {
-      if (_scrubberIndex < _mapPoints.length - 1) {
+      if (_scrubberIndex + step < _mapPoints.length) {
         setState(() {
-          _scrubberIndex++;
+          _scrubberIndex += step;
         });
         _mapController.move(_mapPoints[_scrubberIndex], _mapController.camera.zoom);
       } else {
+        setState(() {
+          _scrubberIndex = _mapPoints.length - 1;
+          _isPlaying = false;
+        });
         timer.cancel();
-        setState(() => _isPlaying = false);
       }
     });
   }
@@ -355,6 +426,35 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
     _mapController.move(_mapPoints[idx], _mapController.camera.zoom);
   }
 
+  List<Polyline> _buildSpeedColoredPolylines() {
+    if (_mapPoints.length < 2) return [];
+
+    final List<Polyline> lines = [];
+    for (int i = 0; i < _mapPoints.length - 1; i++) {
+      final spd = (_points.length > i) ? (_points[i]['spd'] ?? 0) : 0;
+
+      Color segColor;
+      if (spd < 30) {
+        segColor = const Color(0xFF00FF66); // City Green (<30 km/h)
+      } else if (spd < 60) {
+        segColor = const Color(0xFF00E5FF); // Cruising Cyan (30-60 km/h)
+      } else if (spd < 80) {
+        segColor = const Color(0xFFFFB300); // Fast Amber (60-80 km/h)
+      } else {
+        segColor = const Color(0xFFFF3B30); // Top Speed Red (>80 km/h)
+      }
+
+      lines.add(
+        Polyline(
+          points: [_mapPoints[i], _mapPoints[i + 1]],
+          strokeWidth: 4.5,
+          color: segColor,
+        ),
+      );
+    }
+    return lines;
+  }
+
   @override
   Widget build(BuildContext context) {
     final LatLng centerPoint = _mapPoints.isNotEmpty
@@ -367,19 +467,21 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
 
     final currentSpd = currentSnapshot?['spd'] ?? 0;
     final currentLean = currentSnapshot?['lean'] ?? 0;
+    final currentAlt = currentSnapshot?['alt'] ?? 0;
     final currentSec = currentSnapshot?['t'] ?? _scrubberIndex;
+    final totalSec = _points.isNotEmpty ? (_points.last['t'] ?? _points.length) : 0;
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.88,
+      initialChildSize: 0.92,
       minChildSize: 0.5,
-      maxChildSize: 0.95,
+      maxChildSize: 0.98,
       expand: false,
       builder: (context, scrollController) => Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Modal Header
+            // Top Modal Bar
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -390,15 +492,15 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                       'PETA RUTE & REKAMAN TELEMETRI',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
                         letterSpacing: 1.2,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${_mapPoints.length} Titik GPS Tersimpan (1 Hz)',
-                      style: const TextStyle(color: Color(0xFF00FF66), fontSize: 11),
+                      '${_mapPoints.length} Keyframe Terkompresi (${_formatSeconds(_movingSeconds)} bergerak)',
+                      style: const TextStyle(color: Color(0xFF00FF66), fontSize: 10),
                     ),
                   ],
                 ),
@@ -408,9 +510,9 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
-            // Interactive Map with moving scrubber bike marker
+            // Interactive Heatmap Map with Markers
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: SizedBox(
@@ -434,15 +536,12 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                         ),
                         children: [
                           CyberMapTiles.buildTileLayer(),
+
+                          // Speed-Colored Route Heatmap
                           PolylineLayer(
-                            polylines: [
-                              Polyline(
-                                points: _mapPoints,
-                                strokeWidth: 4.5,
-                                color: const Color(0xFF00E5FF),
-                              ),
-                            ],
+                            polylines: _buildSpeedColoredPolylines(),
                           ),
+
                           MarkerLayer(
                             markers: [
                               // Start Point Marker
@@ -467,7 +566,19 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                   size: 20,
                                 ),
                               ),
-                              // Moving Scrubber Motorcycle Marker
+                              // Top Speed Location Marker
+                              if (_peakSpeedIndex > 0 && _peakSpeedIndex < _mapPoints.length)
+                                Marker(
+                                  point: _mapPoints[_peakSpeedIndex],
+                                  width: 24,
+                                  height: 24,
+                                  child: const Icon(
+                                    Icons.bolt,
+                                    color: Color(0xFF7C4DFF),
+                                    size: 20,
+                                  ),
+                                ),
+                              // Active Scrubber Bike Marker
                               if (_scrubberIndex < _mapPoints.length)
                                 Marker(
                                   point: _mapPoints[_scrubberIndex],
@@ -477,8 +588,8 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                     alignment: Alignment.center,
                                     children: [
                                       Container(
-                                        width: 30,
-                                        height: 30,
+                                        width: 28,
+                                        height: 28,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: const Color(0xFFFFB300).withOpacity(0.35),
@@ -500,16 +611,49 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
               ),
             ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
-            // Playback Control Bar (Slider + Play/Pause + Speed Multiplier)
+            // Speed Profile Sparkline Bar (Tap/Drag to scrub)
+            if (_points.length > 2)
+              GestureDetector(
+                onHorizontalDragUpdate: (details) {
+                  final renderBox = context.findRenderObject() as RenderBox?;
+                  if (renderBox != null) {
+                    final width = renderBox.size.width - 32;
+                    final localX = details.localPosition.dx.clamp(0.0, width);
+                    final progress = localX / width;
+                    _onScrubChanged(progress * (_mapPoints.length - 1));
+                  }
+                },
+                child: Container(
+                  height: 40,
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0C1017),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: CustomPaint(
+                    painter: _SpeedSparklinePainter(
+                      points: _points,
+                      activeIndex: _scrubberIndex,
+                      maxSpeed: widget.item.maxSpeedKmh > 0 ? widget.item.maxSpeedKmh : 80.0,
+                    ),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 8),
+
+            // Playback Control Bar with 1x, 2x, 5x, 10x, 20x Speed Multiplier
             if (_mapPoints.length > 1)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0A0E17),
+                  color: const Color(0xFF0C1017),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white10),
+                  border: Border.all(color: Colors.white.withOpacity(0.06)),
                 ),
                 child: Row(
                   children: [
@@ -523,23 +667,25 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                       constraints: const BoxConstraints(),
                       onPressed: _togglePlayback,
                     ),
-                    const SizedBox(width: 6),
-                    // Speed multiplier button
+                    const SizedBox(width: 8),
+                    // High-Speed Multiplier Badge: 1x, 2x, 5x, 10x, 20x
                     InkWell(
                       onTap: _cycleSpeed,
                       borderRadius: BorderRadius.circular(6),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
+                          color: const Color(0xFF00E5FF).withOpacity(0.12),
                           borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
                         ),
                         child: Text(
                           '${_speedMultiplier}x',
                           style: const TextStyle(
                             color: Color(0xFF00E5FF),
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'monospace',
                           ),
                         ),
                       ),
@@ -563,7 +709,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                       ),
                     ),
                     Text(
-                      '${_formatSeconds(currentSec)} / ${_formatSeconds(_points.isNotEmpty ? _points.last['t'] ?? _points.length : 0)}',
+                      '${_formatSeconds(currentSec)} / ${_formatSeconds(totalSec)}',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 10,
@@ -575,15 +721,15 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                 ),
               ),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
 
-            // Telemetry Inspector Cards for the Scrubber Moment
+            // Telemetry Inspector Cards for the Active Timestamp
             Row(
               children: [
                 Expanded(
                   child: _buildInspectorCard('SPEED', '$currentSpd km/h', const Color(0xFF00E5FF)),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
                   child: _buildInspectorCard(
                     'REBAH',
@@ -591,13 +737,13 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                     const Color(0xFFFFB300),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildInspectorCard('ELEVASI', '$currentAlt m', const Color(0xFF00FF66)),
+                ),
+                const SizedBox(width: 6),
                 Expanded(
                   child: _buildInspectorCard('TOP SPEED', '${widget.item.maxSpeedKmh.toStringAsFixed(0)} km/h', const Color(0xFF7C4DFF)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildInspectorCard('REM KERAS', '${widget.item.hardBrakingCount}x', Colors.redAccent),
                 ),
               ],
             ),
@@ -609,11 +755,11 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
 
   Widget _buildInspectorCard(String label, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0E17),
+        color: const Color(0xFF0C1017),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.3), width: 1),
+        border: Border.all(color: color.withOpacity(0.25), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -624,7 +770,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
           ),
         ],
       ),
@@ -635,5 +781,83 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
     final m = (sec ~/ 60).toString().padLeft(2, '0');
     final s = (sec % 60).toString().padLeft(2, '0');
     return '$m:$s';
+  }
+}
+
+class _SpeedSparklinePainter extends CustomPainter {
+  final List<Map<String, dynamic>> points;
+  final int activeIndex;
+  final double maxSpeed;
+
+  _SpeedSparklinePainter({
+    required this.points,
+    required this.activeIndex,
+    required this.maxSpeed,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+
+    final double effectiveMax = max(maxSpeed, 20.0);
+    final path = Path();
+    final fillPath = Path();
+
+    for (int i = 0; i < points.length; i++) {
+      final spd = ((points[i]['spd'] as num?)?.toDouble() ?? 0.0).clamp(0.0, effectiveMax);
+      final x = (i / (points.length - 1)) * size.width;
+      final y = size.height - (spd / effectiveMax) * (size.height - 4);
+
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        path.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+    }
+
+    fillPath.lineTo(size.width, size.height);
+    fillPath.close();
+
+    // Area Fill Gradient
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFF00E5FF).withOpacity(0.3),
+          const Color(0xFF00E5FF).withOpacity(0.0),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawPath(fillPath, fillPaint);
+
+    // Stroke Line
+    final strokePaint = Paint()
+      ..color = const Color(0xFF00E5FF)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(path, strokePaint);
+
+    // Active Cursor Indicator
+    if (activeIndex >= 0 && activeIndex < points.length) {
+      final activeX = (activeIndex / (points.length - 1)) * size.width;
+      final activeSpd = ((points[activeIndex]['spd'] as num?)?.toDouble() ?? 0.0).clamp(0.0, effectiveMax);
+      final activeY = size.height - (activeSpd / effectiveMax) * (size.height - 4);
+
+      final cursorPaint = Paint()
+        ..color = const Color(0xFFFFB300)
+        ..strokeWidth = 1.5;
+      canvas.drawLine(Offset(activeX, 0), Offset(activeX, size.height), cursorPaint);
+
+      final dotPaint = Paint()..color = const Color(0xFFFFB300);
+      canvas.drawCircle(Offset(activeX, activeY), 3.0, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpeedSparklinePainter oldDelegate) {
+    return oldDelegate.activeIndex != activeIndex || oldDelegate.points != points;
   }
 }
