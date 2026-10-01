@@ -109,7 +109,7 @@ class _PcxTelemetryAppState extends State<PcxTelemetryApp> {
           surface: Color(0xFF0C1017),
         ),
       ),
-      home: PiPBuilder(
+      home: PipBuilder(
         builder: (context) => MiniPipCockpit(
           obdService: widget.obdService,
           sensorHub: widget.sensorHub,
