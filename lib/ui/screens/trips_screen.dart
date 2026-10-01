@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../core/trip/trip_manager.dart';
+import '../../core/trip/polyline_encoder.dart';
 import '../common/cyber_map_tiles.dart';
 
 class TripsScreen extends StatefulWidget {
@@ -245,6 +246,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
   List<LatLng> _mapPoints = [];
   int _scrubberIndex = 0;
   bool _isPlaying = false;
+  int _speedMultiplier = 2; // 1x, 2x, 4x
   Timer? _playbackTimer;
 
   @override
@@ -266,12 +268,63 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
       _points = [];
       _mapPoints = [];
     }
+
+    // Resilient fallback for legacy trips: decode polyline if 1Hz timeline was empty
+    if (_mapPoints.isEmpty && widget.item.routePolyline.isNotEmpty) {
+      final pts = PolylineEncoder.decode(widget.item.routePolyline);
+      for (int i = 0; i < pts.length; i++) {
+        final p = pts[i];
+        if (p[0] != 0.0 && p[1] != 0.0) {
+          _mapPoints.add(LatLng(p[0], p[1]));
+          _points.add({
+            't': i,
+            'lat': p[0],
+            'lng': p[1],
+            'spd': widget.item.avgSpeedKmh.round(),
+            'lean': 0,
+          });
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
     _playbackTimer?.cancel();
     super.dispose();
+  }
+
+  void _cycleSpeed() {
+    setState(() {
+      if (_speedMultiplier == 1) {
+        _speedMultiplier = 2;
+      } else if (_speedMultiplier == 2) {
+        _speedMultiplier = 4;
+      } else {
+        _speedMultiplier = 1;
+      }
+    });
+
+    if (_isPlaying) {
+      _startTimer();
+    }
+  }
+
+  void _startTimer() {
+    _playbackTimer?.cancel();
+    final intervalMs = (300 ~/ _speedMultiplier).clamp(50, 400);
+
+    _playbackTimer = Timer.periodic(Duration(milliseconds: intervalMs), (timer) {
+      if (_scrubberIndex < _mapPoints.length - 1) {
+        setState(() {
+          _scrubberIndex++;
+        });
+        _mapController.move(_mapPoints[_scrubberIndex], _mapController.camera.zoom);
+      } else {
+        timer.cancel();
+        setState(() => _isPlaying = false);
+      }
+    });
   }
 
   void _togglePlayback() {
@@ -285,25 +338,16 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
         _scrubberIndex = 0;
       }
       setState(() => _isPlaying = true);
-
-      _playbackTimer?.cancel();
-      // Tick every 250ms (4x speed simulation)
-      _playbackTimer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
-        if (_scrubberIndex < _mapPoints.length - 1) {
-          setState(() {
-            _scrubberIndex++;
-          });
-          _mapController.move(_mapPoints[_scrubberIndex], _mapController.camera.zoom);
-        } else {
-          timer.cancel();
-          setState(() => _isPlaying = false);
-        }
-      });
+      _startTimer();
     }
   }
 
   void _onScrubChanged(double val) {
     if (_mapPoints.isEmpty) return;
+    if (_isPlaying) {
+      _playbackTimer?.cancel();
+      setState(() => _isPlaying = false);
+    }
     final idx = val.round().clamp(0, _mapPoints.length - 1);
     setState(() {
       _scrubberIndex = idx;
@@ -437,7 +481,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                         height: 30,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          color: const Color(0xFFFFB300).withOpacity(0.3),
+                                          color: const Color(0xFFFFB300).withOpacity(0.35),
                                           border: Border.all(color: const Color(0xFFFFB300), width: 2),
                                         ),
                                       ),
@@ -458,7 +502,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
 
             const SizedBox(height: 10),
 
-            // Playback Control Bar (Slider + Play/Pause)
+            // Playback Control Bar (Slider + Play/Pause + Speed Multiplier)
             if (_mapPoints.length > 1)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -475,7 +519,30 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                         color: const Color(0xFF00FF66),
                         size: 28,
                       ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                       onPressed: _togglePlayback,
+                    ),
+                    const SizedBox(width: 6),
+                    // Speed multiplier button
+                    InkWell(
+                      onTap: _cycleSpeed,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${_speedMultiplier}x',
+                          style: const TextStyle(
+                            color: Color(0xFF00E5FF),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
                     Expanded(
                       child: SliderTheme(

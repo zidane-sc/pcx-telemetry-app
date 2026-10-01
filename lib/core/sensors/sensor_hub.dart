@@ -51,10 +51,10 @@ class SensorHub {
   double _filteredRoll = 0.0;
   double _currentG = 0.0;
 
-  // Low-pass filter smoothing coefficient (0.05 - 0.15 = buttery smooth against engine vibration)
-  static const double _lpfAlpha = 0.10;
-  // Deadband threshold in degrees around 0
-  static const double _deadbandDeg = 1.5;
+  // Low-pass filter smoothing coefficient (0.08 = ultra smooth against engine vibration)
+  static const double _lpfAlpha = 0.08;
+  // Soft deadband threshold in degrees around 0
+  static const double _deadbandDeg = 1.2;
 
   SensorHubData get latestData => SensorHubData(
         latitude: _currentLat,
@@ -98,13 +98,14 @@ class SensorHub {
           _currentLat = pos.latitude;
           _currentLng = pos.longitude;
           _currentAlt = pos.altitude;
-          // pos.speed is in m/s; convert to km/h.
           final spd = pos.speed > 0 ? pos.speed * 3.6 : 0.0;
           _currentGpsSpeed = spd;
 
-          // Update heading if vehicle is moving to avoid stationary jitter
-          if (spd > 2.5 && pos.heading >= 0.0) {
-            _currentHeading = pos.heading;
+          // Shortest-arc circular angle smoothing for heading (no snapping across North 0°/360°)
+          if (spd > 2.0 && pos.heading >= 0.0) {
+            final diff = ((pos.heading - _currentHeading + 180.0) % 360.0) - 180.0;
+            _currentHeading = (_currentHeading + diff * 0.22) % 360.0;
+            if (_currentHeading < 0) _currentHeading += 360.0;
           }
         });
       }
@@ -112,7 +113,7 @@ class SensorHub {
       debugPrint('[SensorHub] GPS Error: $e');
     }
 
-    // 2. Smooth Lean Angle from IMU Accelerometer
+    // 2. Smooth Lean Angle from IMU Accelerometer with soft deadband
     try {
       _accelSub = accelerometerEventStream().listen((event) {
         final double magnitudeYZ =
@@ -120,16 +121,20 @@ class SensorHub {
         final double rawRollRad = atan2(event.x, magnitudeYZ);
         double rawRollDeg = rawRollRad * (180.0 / pi);
 
-        // Clamp to realistic motorcycle limits (-55° to +55°)
+        // Clamp to realistic motorcycle lean limits (-55° to +55°)
         rawRollDeg = rawRollDeg.clamp(-55.0, 55.0);
 
         // Low-pass filter (Exponential Moving Average)
-        _filteredRoll =
+        final double smoothed =
             (_lpfAlpha * rawRollDeg) + ((1.0 - _lpfAlpha) * _filteredRoll);
 
-        // Apply deadband around upright center
-        if (_filteredRoll.abs() < _deadbandDeg) {
+        // Continuous soft deadband around upright center (no abrupt steps)
+        if (smoothed.abs() <= _deadbandDeg) {
           _filteredRoll = 0.0;
+        } else {
+          _filteredRoll = (smoothed > 0)
+              ? (smoothed - _deadbandDeg)
+              : (smoothed + _deadbandDeg);
         }
 
         // Net G-force calculation with smoothing
@@ -137,7 +142,7 @@ class SensorHub {
             event.y * event.y +
             event.z * event.z);
         final double rawG = (netAcc - 9.81) / 9.81;
-        _currentG = (0.2 * rawG) + (0.8 * _currentG);
+        _currentG = (0.15 * rawG) + (0.85 * _currentG);
       });
     } catch (e) {
       debugPrint('[SensorHub] IMU Error: $e');
