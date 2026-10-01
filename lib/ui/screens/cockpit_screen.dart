@@ -755,13 +755,18 @@ class _CockpitScreenState extends State<CockpitScreen> {
     final perfBox = PerformanceBox();
     final activeVeh = VehicleManager().activeVehicle;
     final bool isRecording = tripMgr.isRecording;
-    final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
-    final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
+    // A channel is only comparable once the ECU has actually answered it.
+    // `isObdLive` means the dongle is connected; on a motorcycle that is not
+    // the same as "this ECU has a coolant sensor".
+    final bool hasEct = _currentFrame.has(ObdChannel.ect);
+    final bool hasBatt = _currentFrame.has(ObdChannel.batteryVoltage);
+    final bool isOverheat = hasEct && _currentFrame.ectC > 100.0;
+    final bool isLowBatt = hasBatt && _currentFrame.batteryVoltage < 11.8;
 
     final dyno = DynoPowerCalculator.estimatePowerAndTorque(
       speedKmh: displaySpeed,
       accelerationMps2: _currentSensor.accelerationMps2,
-      rpm: isObdLive ? _currentFrame.rpm : (displaySpeed * 85.0).clamp(0.0, 9500.0),
+      rpm: _currentFrame.rpm,
       totalMassKg: activeVeh.type == VehicleType.motorcycle ? 202.0 : 1100.0,
     );
 
@@ -778,8 +783,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
           // 16-Segment Shift Light Bar
           ShiftLightBar(
-            rpm: isObdLive ? _currentFrame.rpm : (displaySpeed * 85.0).clamp(0.0, 9500.0),
-            isLive: isObdLive,
+            // No fabricated RPM from road speed. A shift light that guesses is worse
+            // than a dark one.
+            rpm: _currentFrame.rpm,
+            isLive: _currentFrame.has(ObdChannel.rpm),
           ),
           const SizedBox(height: 6),
 
@@ -853,13 +860,17 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       children: [
                         _buildSubMetric(
                           'RPM',
-                          isObdLive ? _currentFrame.rpm.toStringAsFixed(0) : '--',
+                          _currentFrame.has(ObdChannel.rpm)
+                              ? _currentFrame.rpm.toStringAsFixed(0)
+                              : '--',
                           const Color(0xFF00FF66),
                         ),
                         _buildSubDivider(),
                         _buildSubMetric(
                           'TPS',
-                          isObdLive ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%' : '--',
+                          _currentFrame.has(ObdChannel.tps)
+                              ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%'
+                              : '--',
                           const Color(0xFF00E5FF),
                         ),
                         _buildSubDivider(),
@@ -961,8 +972,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
     final perfBox = PerformanceBox();
     final activeVeh = VehicleManager().activeVehicle;
     final bool isRecording = tripMgr.isRecording;
-    final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
-    final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
+    // A channel is only comparable once the ECU has actually answered it.
+    // `isObdLive` means the dongle is connected; on a motorcycle that is not
+    // the same as "this ECU has a coolant sensor".
+    final bool hasEct = _currentFrame.has(ObdChannel.ect);
+    final bool hasBatt = _currentFrame.has(ObdChannel.batteryVoltage);
+    final bool isOverheat = hasEct && _currentFrame.ectC > 100.0;
+    final bool isLowBatt = hasBatt && _currentFrame.batteryVoltage < 11.8;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
@@ -975,8 +991,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 ShiftLightBar(
-                  rpm: isObdLive ? _currentFrame.rpm : (displaySpeed * 85.0).clamp(0.0, 9500.0),
-                  isLive: isObdLive,
+                  // No fabricated RPM from road speed. A shift light that guesses is worse
+                  // than a dark one.
+                  rpm: _currentFrame.rpm,
+                  isLive: _currentFrame.has(ObdChannel.rpm),
                 ),
                 Expanded(
                   child: Center(
@@ -1016,13 +1034,17 @@ class _CockpitScreenState extends State<CockpitScreen> {
                             children: [
                               _buildSubMetric(
                                 'RPM',
-                                isObdLive ? _currentFrame.rpm.toStringAsFixed(0) : '--',
+                                _currentFrame.has(ObdChannel.rpm)
+                              ? _currentFrame.rpm.toStringAsFixed(0)
+                              : '--',
                                 const Color(0xFF00FF66),
                               ),
                               _buildSubDivider(),
                               _buildSubMetric(
                                 'TPS',
-                                isObdLive ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%' : '--',
+                                _currentFrame.has(ObdChannel.tps)
+                              ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%'
+                              : '--',
                                 const Color(0xFF00E5FF),
                               ),
                               _buildSubDivider(),
@@ -1378,6 +1400,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
     bool isLowBatt,
     VehicleProfile activeVeh,
   ) {
+    // The fuel model needs RPM, MAP and IAT together. If any is missing the
+    // figure is not a degraded estimate, it is an unknown, and showing a
+    // plausible km/L would be a fabrication.
+    final bool hasFuelMath = _currentFrame.has(ObdChannel.rpm) &&
+        _currentFrame.has(ObdChannel.map) &&
+        _currentFrame.has(ObdChannel.iat);
+    final bool hasEct = _currentFrame.has(ObdChannel.ect);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
@@ -1396,15 +1425,17 @@ class _CockpitScreenState extends State<CockpitScreen> {
           _buildRibbonDivider(),
           _buildRibbonColumn(
             label: 'EFISIENSI',
-            value: isObdLive
-                ? (_currentFrame.speedKmh > 2 ? '${_currentFrame.instantaneousKml.toStringAsFixed(1)} km/L' : '${_currentFrame.fuelFlowLh.toStringAsFixed(2)} L/h')
-                : (isRecording ? '45.5 km/L' : '--'),
+            value: hasFuelMath
+                ? (_currentFrame.speedKmh > 2
+                    ? '${_currentFrame.instantaneousKml.toStringAsFixed(1)} km/L'
+                    : '${_currentFrame.fuelFlowLh.toStringAsFixed(2)} L/h')
+                : '--',
             color: const Color(0xFFFFB300),
           ),
           _buildRibbonDivider(),
           _buildRibbonColumn(
             label: 'COOLANT',
-            value: isObdLive ? '${_currentFrame.ectC.toStringAsFixed(0)}°C' : '--',
+            value: hasEct ? '${_currentFrame.ectC.toStringAsFixed(0)}°C' : '--',
             color: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF),
           ),
           _buildRibbonDivider(),

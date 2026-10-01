@@ -45,7 +45,10 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
         isObdLive ? _currentFrame.speedKmh : _currentSensor.gpsSpeedKmh;
 
     final tripMgr = TripManager();
-    final bool isOverheat = _currentFrame.ectC > 100.0;
+    // Honours the per-channel validity set: a bike with no coolant sensor
+    // must not light an overheat warning off a default reading.
+    final bool hasEct = _currentFrame.has(ObdChannel.ect);
+    final bool isOverheat = hasEct && _currentFrame.ectC > 100.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E17),
@@ -134,10 +137,10 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                               // Honesty rule: no placeholder when the ECU is
                               // silent. This used to print a hardcoded 88°C,
                               // which reads as a real overheat warning.
-                              value: isObdLive
+                              value: hasEct
                                   ? '${_currentFrame.ectC.toStringAsFixed(0)}°C'
                                   : '--',
-                              color: isObdLive
+                              color: hasEct
                                   ? (isOverheat
                                       ? Colors.redAccent
                                       : const Color(0xFF00E5FF))

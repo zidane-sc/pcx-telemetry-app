@@ -15,9 +15,14 @@ class ShiftLightBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const int totalSegments = 16;
-    final double normalized = (rpm / maxRpm).clamp(0.0, 1.0);
+    // Without a live ECU the RPM is unknown, so the bar shows nothing at all.
+    // A shift light driven by an estimated RPM lights up when the rider is
+    // not near the limiter, which trains them to ignore the one instrument
+    // that matters most.
+    final double normalized =
+        isLive ? (rpm / maxRpm).clamp(0.0, 1.0) : 0.0;
     final int litCount = (normalized * totalSegments).round();
-    final bool isRevLimit = rpm >= 8900.0;
+    final bool isRevLimit = isLive && rpm >= 8900.0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
