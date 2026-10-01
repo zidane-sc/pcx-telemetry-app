@@ -13,6 +13,9 @@ class SensorHubData {
   final double headingDeg; // Direction of travel (0-360°)
   final double rollAngleDeg; // Lean angle (Left negative, Right positive)
   final double gForce;
+  final double accelerationMps2; // Forward acceleration (dV/dt)
+  final double slopePercent; // Incline gradient (+% climb, -% descent)
+  final bool potholeDetected; // Road shock impulse event
 
   const SensorHubData({
     required this.latitude,
@@ -22,6 +25,9 @@ class SensorHubData {
     required this.headingDeg,
     required this.rollAngleDeg,
     required this.gForce,
+    this.accelerationMps2 = 0.0,
+    this.slopePercent = 0.0,
+    this.potholeDetected = false,
   });
 
   factory SensorHubData.empty() => const SensorHubData(
@@ -32,6 +38,9 @@ class SensorHubData {
         headingDeg: 0.0,
         rollAngleDeg: 0.0,
         gForce: 0.0,
+        accelerationMps2: 0.0,
+        slopePercent: 0.0,
+        potholeDetected: false,
       );
 }
 
@@ -43,6 +52,7 @@ class SensorHub {
   StreamSubscription<Position>? _gpsSub;
   StreamSubscription<AccelerometerEvent>? _accelSub;
   Timer? _emitThrottleTimer;
+  Timer? _potholeClearTimer;
 
   double _currentLat = 0.0;
   double _currentLng = 0.0;
@@ -51,6 +61,16 @@ class SensorHub {
   double _currentHeading = 0.0;
   double _filteredRoll = 0.0;
   double _currentG = 0.0;
+
+  double _accelerationMps2 = 0.0;
+  double _slopePercent = 0.0;
+  bool _potholeDetected = false;
+
+  DateTime? _prevGpsTime;
+  double _prevGpsSpeed = 0.0;
+  double? _prevAltForSlope;
+  double? _prevLatForSlope;
+  double? _prevLngForSlope;
 
   bool _isLandscape = false;
   bool _enableLean = true;
@@ -89,6 +109,9 @@ class SensorHub {
         headingDeg: _currentHeading,
         rollAngleDeg: _filteredRoll,
         gForce: _currentG,
+        accelerationMps2: _accelerationMps2,
+        slopePercent: _slopePercent,
+        potholeDetected: _potholeDetected,
       );
 
   Future<void> start() async {
@@ -106,8 +129,8 @@ class SensorHub {
         if (defaultTargetPlatform == TargetPlatform.android) {
           locationSettings = AndroidSettings(
             accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 0, // Real-time continuous updates
-            forceLocationManager: false, // High-frequency FusedLocationProvider
+            distanceFilter: 0,
+            forceLocationManager: false,
             intervalDuration: const Duration(milliseconds: 200), // 5 Hz
           );
         } else {
@@ -120,13 +143,46 @@ class SensorHub {
         _gpsSub = Geolocator.getPositionStream(
           locationSettings: locationSettings,
         ).listen((pos) {
+          final now = DateTime.now();
           _currentLat = pos.latitude;
           _currentLng = pos.longitude;
           _currentAlt = pos.altitude;
           final spd = pos.speed > 0 ? pos.speed * 3.6 : 0.0;
           _currentGpsSpeed = spd;
 
-          // Shortest-arc circular angle smoothing for heading (no snapping across North 0°/360°)
+          // Forward acceleration calculation: a = (v2 - v1) / dt
+          if (_prevGpsTime != null) {
+            final double dt = now.difference(_prevGpsTime!).inMilliseconds / 1000.0;
+            if (dt > 0.08 && dt < 1.0) {
+              final double dv = (spd - _prevGpsSpeed) / 3.6; // m/s
+              _accelerationMps2 = (0.3 * (dv / dt)) + (0.7 * _accelerationMps2);
+            }
+          }
+          _prevGpsTime = now;
+          _prevGpsSpeed = spd;
+
+          // Road slope gradient calculation: (dAlt / dDist) * 100%
+          if (_prevLatForSlope != null && _prevLngForSlope != null && _prevAltForSlope != null) {
+            final double dist = Geolocator.distanceBetween(
+              _prevLatForSlope!,
+              _prevLngForSlope!,
+              pos.latitude,
+              pos.longitude,
+            );
+            if (dist >= 12.0) {
+              final double dAlt = pos.altitude - _prevAltForSlope!;
+              _slopePercent = ((dAlt / dist) * 100.0).clamp(-25.0, 25.0);
+              _prevLatForSlope = pos.latitude;
+              _prevLngForSlope = pos.longitude;
+              _prevAltForSlope = pos.altitude;
+            }
+          } else {
+            _prevLatForSlope = pos.latitude;
+            _prevLngForSlope = pos.longitude;
+            _prevAltForSlope = pos.altitude;
+          }
+
+          // Shortest-arc circular angle smoothing for heading
           if (spd > 2.0 && pos.heading >= 0.0) {
             final diff = ((pos.heading - _currentHeading + 180.0) % 360.0) - 180.0;
             _currentHeading = (_currentHeading + diff * 0.22) % 360.0;
@@ -138,7 +194,7 @@ class SensorHub {
       debugPrint('[SensorHub] GPS Error: $e');
     }
 
-    // 2. Mathematically Exact Lean Angle for Portrait & Landscape
+    // 2. Mathematically Exact Lean Angle + Pothole Shock Detector
     try {
       _accelSub = accelerometerEventStream().listen((event) {
         if (!_enableLean) {
@@ -152,16 +208,13 @@ class SensorHub {
         if (!isLandscape) {
           // PORTRAIT: lateral roll moves gravity across phone X axis
           final double magnitudeYZ = sqrt(event.y * event.y + event.z * event.z);
-          // Leaning left produces positive event.x, negate to get negative (LEFT)
           rawRollRad = -atan2(event.x, magnitudeYZ);
         } else {
           // LANDSCAPE: lateral roll moves gravity across phone Y axis
           final double magnitudeXZ = sqrt(event.x * event.x + event.z * event.z);
           if (event.x >= 0) {
-            // Landscape Left (standard 90° CCW, top of phone on left, event.x > 0)
             rawRollRad = atan2(event.y, magnitudeXZ);
           } else {
-            // Landscape Right (90° CW, top of phone on right, event.x < 0)
             rawRollRad = -atan2(event.y, magnitudeXZ);
           }
         }
@@ -190,6 +243,16 @@ class SensorHub {
             event.z * event.z);
         final double rawG = (netAcc - 9.81) / 9.81;
         _currentG = (0.15 * rawG) + (0.85 * _currentG);
+
+        // Pothole Shock / Rough Road Detector:
+        // Spike in net vertical shock while vehicle is moving > 10 km/h
+        if (rawG.abs() >= 1.35 && _currentGpsSpeed > 10.0) {
+          _potholeDetected = true;
+          _potholeClearTimer?.cancel();
+          _potholeClearTimer = Timer(const Duration(milliseconds: 1500), () {
+            _potholeDetected = false;
+          });
+        }
       });
     } catch (e) {
       debugPrint('[SensorHub] IMU Error: $e');
@@ -207,5 +270,6 @@ class SensorHub {
     _gpsSub?.cancel();
     _accelSub?.cancel();
     _emitThrottleTimer?.cancel();
+    _potholeClearTimer?.cancel();
   }
 }

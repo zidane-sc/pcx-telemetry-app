@@ -5,7 +5,9 @@ import '../../core/sensors/sensor_hub.dart';
 import '../../core/sync/pocketbase_service.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/vehicle/vehicle_manager.dart';
+import '../../core/map/offline_map_downloader.dart';
 import '../vehicle/vehicle_picker_sheet.dart';
+import '../garage/fuel_log_sheet.dart';
 
 class GarageScreen extends StatefulWidget {
   final ObdService obdService;
@@ -306,6 +308,94 @@ class _GarageScreenState extends State<GarageScreen> {
     }
   }
 
+  void _downloadOfflineMapDialog() {
+    final downloader = OfflineMapDownloader();
+    if (!downloader.isDownloading) {
+      downloader.downloadJabodetabekOfflineMap();
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StreamBuilder<DownloadProgress>(
+        stream: downloader.progressStream,
+        initialData: const DownloadProgress(downloaded: 0, total: 225, statusText: 'Memulai pengunduhan...'),
+        builder: (context, snapshot) {
+          final p = snapshot.data!;
+          return AlertDialog(
+            backgroundColor: const Color(0xFF131B2E),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            title: Row(
+              children: const [
+                Icon(Icons.cloud_download, color: Color(0xFF00E5FF), size: 22),
+                SizedBox(width: 8),
+                Text(
+                  'DOWNLOAD PETA OFFLINE',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Mengunduh area Jabodetabek (Jakarta, Bogor, Depok, Tangerang, Bekasi):',
+                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: p.percent,
+                    backgroundColor: Colors.white10,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00FF66)),
+                    minHeight: 6,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${(p.percent * 100).toStringAsFixed(0)}%',
+                      style: const TextStyle(color: Color(0xFF00FF66), fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                    ),
+                    Text(
+                      '${p.downloaded} / ${p.total} Tile',
+                      style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  p.statusText,
+                  style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                ),
+              ],
+            ),
+            actions: [
+              if (p.isCompleted)
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF66)),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('SELESAI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                )
+              else
+                TextButton(
+                  onPressed: () {
+                    downloader.cancelDownload();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('BATALKAN', style: TextStyle(color: Colors.redAccent)),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -432,6 +522,45 @@ class _GarageScreenState extends State<GarageScreen> {
                 ),
               ],
             ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Action Buttons: Catat Bensin & Download Peta Offline Jabodetabek
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00FF66).withOpacity(0.12),
+                    foregroundColor: const Color(0xFF00FF66),
+                    elevation: 0,
+                    side: const BorderSide(color: Color(0xFF00FF66), width: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => FuelLogSheet.show(context, currentOdometer: totalOdo, pbService: widget.pbService),
+                  icon: const Icon(Icons.local_gas_station, size: 16),
+                  label: const Text('CATAT BENSIN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00E5FF).withOpacity(0.12),
+                    foregroundColor: const Color(0xFF00E5FF),
+                    elevation: 0,
+                    side: const BorderSide(color: Color(0xFF00E5FF), width: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: _downloadOfflineMapDialog,
+                  icon: const Icon(Icons.cloud_download, size: 16),
+                  label: const Text('MAP OFFLINE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                ),
+              ),
+            ],
           ),
 
           const SizedBox(height: 18),

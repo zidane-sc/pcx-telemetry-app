@@ -14,6 +14,7 @@ import '../../core/audio/voice_alert_service.dart';
 import '../../core/navigation/navigation_manager.dart';
 import '../../core/vehicle/vehicle_manager.dart';
 import '../../core/telemetry/performance_box.dart';
+import '../../core/telemetry/dyno_power_calculator.dart';
 import '../navigation/search_destination_sheet.dart';
 import '../navigation/navigation_turn_banner.dart';
 import '../navigation/cockpit_map_view.dart';
@@ -50,6 +51,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
   // Navigation UI State
   bool _isInlineMapVisible = true;
+  bool _isSunGlareMode = false;
 
   @override
   void initState() {
@@ -73,6 +75,16 @@ class _CockpitScreenState extends State<CockpitScreen> {
           ? _currentFrame.speedKmh
           : sensorData.gpsSpeedKmh;
       PerformanceBox().onSpeedUpdate(currentSpeed);
+
+      // Check audio safety limits (lean limit, speed limit, overheat, low battery)
+      final activeVeh = VehicleManager().activeVehicle;
+      VoiceAlertService().checkSafetyLimits(
+        speedKmh: currentSpeed,
+        leanAngleDeg: sensorData.rollAngleDeg,
+        ectC: _currentFrame.ectC,
+        batteryVoltage: _currentFrame.batteryVoltage,
+        isBike: activeVeh.hasLeanSensor,
+      );
 
       if (NavigationManager().isNavigating) {
         NavigationManager().updateLocation(
@@ -644,7 +656,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF080B11),
+      backgroundColor: _isSunGlareMode ? const Color(0xFFF1F5F9) : const Color(0xFF080B11),
       body: SafeArea(
         child: OrientationBuilder(
           builder: (context, orientation) {
@@ -678,6 +690,16 @@ class _CockpitScreenState extends State<CockpitScreen> {
     final bool isRecording = tripMgr.isRecording;
     final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
     final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
+
+    final dyno = DynoPowerCalculator.estimatePowerAndTorque(
+      speedKmh: displaySpeed,
+      accelerationMps2: _currentSensor.accelerationMps2,
+      rpm: isObdLive ? _currentFrame.rpm : (displaySpeed * 85.0).clamp(0.0, 9500.0),
+      totalMassKg: activeVeh.type == VehicleType.motorcycle ? 202.0 : 1100.0,
+    );
+
+    final Color mainTextColor = _isSunGlareMode ? Colors.black : Colors.white;
+    final Color pillBgColor = _isSunGlareMode ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
@@ -727,8 +749,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     children: [
                       Text(
                         displaySpeed.toStringAsFixed(0),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: mainTextColor,
                           fontSize: 92,
                           fontWeight: FontWeight.w900,
                           height: 0.9,
@@ -754,7 +776,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
+                      color: pillBgColor,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white10),
                     ),
@@ -787,6 +809,46 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       ],
                     ),
                   ),
+
+                  // Live Dyno Power Output & Slope Pill
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildPillBadge(
+                        '⚡ ${dyno['hp']!.toStringAsFixed(1)} HP • ${dyno['torqueNm']!.toStringAsFixed(1)} Nm',
+                        const Color(0xFF00FF66),
+                        pillBgColor,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildPillBadge(
+                        '${_currentSensor.slopePercent >= 0 ? '▲ +' : '▼ '}${_currentSensor.slopePercent.toStringAsFixed(1)}% SLOPE',
+                        _currentSensor.slopePercent.abs() > 6.0 ? const Color(0xFFFFB300) : Colors.white70,
+                        pillBgColor,
+                      ),
+                    ],
+                  ),
+
+                  // Pothole Shock Warning Banner
+                  if (_currentSensor.potholeDetected) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber, width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.warning_amber, color: Colors.amber, size: 12),
+                          SizedBox(width: 4),
+                          Text('GUNCANGAN / LUBANG JALAN', style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   // 0-60 km/h Performance Drag Timer Pill
                   const SizedBox(height: 6),
@@ -1073,6 +1135,19 @@ class _CockpitScreenState extends State<CockpitScreen> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Sun Glare Mode Toggle Button
+            IconButton(
+              icon: Icon(
+                _isSunGlareMode ? Icons.wb_sunny : Icons.wb_sunny_outlined,
+                color: _isSunGlareMode ? const Color(0xFFFFB300) : Colors.white38,
+                size: 18,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Mode Siang Terik (Sun Glare)',
+              onPressed: () => setState(() => _isSunGlareMode = !_isSunGlareMode),
+            ),
+
             // Search POI Button
             IconButton(
               icon: const Icon(Icons.search, color: Color(0xFF00FF66), size: 18),
@@ -1114,6 +1189,27 @@ class _CockpitScreenState extends State<CockpitScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildPillBadge(String text, Color color, Color bgColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+          fontFamily: 'monospace',
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 

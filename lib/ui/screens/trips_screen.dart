@@ -8,6 +8,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/trip/polyline_encoder.dart';
 import '../common/cyber_map_tiles.dart';
+import '../trip/trip_share_card_sheet.dart';
 
 class TripsScreen extends StatefulWidget {
   const TripsScreen({super.key});
@@ -176,13 +177,30 @@ class _TripsScreenState extends State<TripsScreen> {
                                 ),
                               ],
                             ),
-                            Text(
-                              'Rp ${item.tripCostIdr.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                color: Color(0xFF00FF66),
-                                fontWeight: FontWeight.w900,
-                                fontSize: 13,
-                              ),
+                            Row(
+                              children: [
+                                Text(
+                                  'Rp ${item.tripCostIdr.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF00FF66),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                InkWell(
+                                  onTap: () => TripShareCardSheet.show(context, item),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.06),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Icon(Icons.share, size: 14, color: Color(0xFF00E5FF)),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -572,9 +590,18 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white54, size: 20),
-                  onPressed: () => Navigator.pop(context),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.share, color: Color(0xFF00E5FF), size: 18),
+                      tooltip: 'Bagikan Story & Export GPX',
+                      onPressed: () => TripShareCardSheet.show(context, widget.item),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
               ],
             ),
