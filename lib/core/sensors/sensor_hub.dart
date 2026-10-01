@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
@@ -56,6 +57,16 @@ class SensorHub {
 
   void setOrientation({required bool isLandscape}) {
     _isLandscape = isLandscape;
+  }
+
+  bool get _isPhoneLandscape {
+    try {
+      final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+      if (view != null && view.physicalSize.width > 0 && view.physicalSize.height > 0) {
+        return view.physicalSize.width > view.physicalSize.height;
+      }
+    } catch (_) {}
+    return _isLandscape;
   }
 
   void setLeanEnabled(bool enabled) {
@@ -127,7 +138,7 @@ class SensorHub {
       debugPrint('[SensorHub] GPS Error: $e');
     }
 
-    // 2. Smooth Lean Angle with Full Landscape & Portrait Orientation Awareness
+    // 2. Mathematically Exact Lean Angle for Portrait & Landscape
     try {
       _accelSub = accelerometerEventStream().listen((event) {
         if (!_enableLean) {
@@ -136,44 +147,41 @@ class SensorHub {
         }
 
         double rawRollRad = 0.0;
+        final bool isLandscape = _isPhoneLandscape;
 
-        // Auto-detect or use UI orientation flag:
-        // In landscape: phone's long edge (Y axis) is across the handlebars.
-        // In portrait: phone's short edge (X axis) is across the handlebars.
-        final bool isHorizontal = _isLandscape || (event.x.abs() > event.y.abs());
-
-        if (!isHorizontal) {
-          // PORTRAIT: lateral tilt moves gravity across X axis
+        if (!isLandscape) {
+          // PORTRAIT: lateral roll moves gravity across phone X axis
           final double magnitudeYZ = sqrt(event.y * event.y + event.z * event.z);
-          // Leaning left -> event.x > 0 -> negate to get negative (LEFT)
+          // Leaning left produces positive event.x, negate to get negative (LEFT)
           rawRollRad = -atan2(event.x, magnitudeYZ);
         } else {
-          // LANDSCAPE: lateral tilt moves gravity across Y axis
+          // LANDSCAPE: lateral roll moves gravity across phone Y axis
           final double magnitudeXZ = sqrt(event.x * event.x + event.z * event.z);
-          if (event.x <= 0) {
-            // Landscape Left (standard: top of phone pointing left)
+          if (event.x >= 0) {
+            // Landscape Left (standard 90° CCW, top of phone on left, event.x > 0)
             rawRollRad = atan2(event.y, magnitudeXZ);
           } else {
-            // Landscape Right (top of phone pointing right)
+            // Landscape Right (90° CW, top of phone on right, event.x < 0)
             rawRollRad = -atan2(event.y, magnitudeXZ);
           }
         }
 
-        double rawRollDeg = rawRollRad * (180.0 / pi);
-        // Clamp to realistic motorcycle lean limits (-55° to +55°)
-        rawRollDeg = rawRollDeg.clamp(-55.0, 55.0);
+        final double rawRollDeg = (rawRollRad * (180.0 / pi)).clamp(-55.0, 55.0);
 
         // Low-pass filter (Exponential Moving Average)
         final double smoothed =
             (_lpfAlpha * rawRollDeg) + ((1.0 - _lpfAlpha) * _filteredRoll);
 
-        // Continuous soft deadband around upright center (no abrupt steps)
-        if (smoothed.abs() <= _deadbandDeg) {
+        // Smooth deadband: exactly 0.0° when upright (<= 1.2°), seamlessly blends to exact reading by 3.5°
+        final double absDeg = smoothed.abs();
+        if (absDeg <= _deadbandDeg) {
           _filteredRoll = 0.0;
+        } else if (absDeg >= _deadbandDeg + 2.5) {
+          _filteredRoll = smoothed;
         } else {
-          _filteredRoll = (smoothed > 0)
-              ? (smoothed - _deadbandDeg)
-              : (smoothed + _deadbandDeg);
+          final double t = (absDeg - _deadbandDeg) / 2.5;
+          final double blend = 3 * t * t - 2 * t * t * t;
+          _filteredRoll = (smoothed > 0 ? 1.0 : -1.0) * (_deadbandDeg + blend * 2.5);
         }
 
         // Net G-force calculation with smoothing
