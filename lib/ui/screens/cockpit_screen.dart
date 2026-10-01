@@ -11,8 +11,11 @@ import '../../core/trip/trip_manager.dart';
 import '../../core/sync/pocketbase_service.dart';
 import '../../core/pip/pip_manager.dart';
 import '../../core/audio/voice_alert_service.dart';
+import '../../core/logger/app_logger.dart';
 import '../../core/rules/rule_service.dart';
 import '../../core/rules/trigger_rule.dart';
+import '../../core/telemetry/crash_detector.dart';
+import '../overlay/crash_alert_overlay.dart';
 import '../../core/navigation/navigation_manager.dart';
 import '../../core/vehicle/vehicle_manager.dart';
 import '../../core/telemetry/performance_box.dart';
@@ -44,6 +47,11 @@ class _CockpitScreenState extends State<CockpitScreen> {
   TelemetryFrame _currentFrame = TelemetryFrame.empty();
   SensorHubData _currentSensor = SensorHubData.empty();
   String? _connectedDeviceName;
+
+  /// Sprint 4: crash detection. Armed when a trip starts, not on app launch,
+  /// so a phone being picked up off a seat never registers as a fall.
+  final CrashDetector _crashDetector = CrashDetector();
+  bool _crashDialogOpen = false;
 
   // Auto-Start Trip Countdown State
   bool _isAutoStartDialogShowing = false;
@@ -87,6 +95,39 @@ class _CockpitScreenState extends State<CockpitScreen> {
             : null,
       );
 
+      // Sprint 4: crash detection. sensorData.gForce is the smoothed net
+      // acceleration the pothole detector already computes, so no extra IMU
+      // stream is needed.
+      if (!_crashDialogOpen && !_isAutoStartDialogShowing) {
+        final crash = _crashDetector.update(
+          now: DateTime.now(),
+          netG: sensorData.gForce,
+          speedKmh: currentSpeed,
+          isBike: VehicleManager().activeVehicle.hasLeanSensor,
+        );
+        if (crash.state == CrashState.countdown) {
+          _crashDialogOpen = true;
+          CrashAlertOverlay.show(
+            context,
+            detection: crash,
+            onCancel: () {
+              _crashDetector.cancel();
+              _crashDialogOpen = false;
+            },
+            onExpired: () {
+              // Logged, never dispatched. A crash event is worth keeping even
+              // when the rider never saw the dialog.
+              AppLogger().logError(
+                errorType: 'CrashDetected',
+                stackTrace: 'peakG=${crash.peakG}',
+              );
+            },
+          ).then((_) {
+            if (mounted) _crashDialogOpen = false;
+          });
+        }
+      }
+
       // Check audio safety limits (lean limit, speed limit, overheat, low battery)
       // Sprint 1: telemetry thresholds now live in the Trigger→Action rule engine.
       // It applies hold-time hysteresis and cooldown, so a value hovering at the
@@ -126,6 +167,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
   }
 
   void _onTripStateChanged() {
+    // Sprint 4: arm crash detection when a trip starts, disarm when it stops.
+    // Arming on app launch would mean a phone being picked up off the seat
+    // could register as a fall.
+    if (TripManager().isRecording) {
+      _crashDetector.arm();
+    } else if (_crashDetector.state == CrashState.countdown) {
+      _crashDetector.cancel();
+    }
     if (mounted) setState(() {});
   }
 

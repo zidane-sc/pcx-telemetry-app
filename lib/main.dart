@@ -8,6 +8,7 @@ import 'core/sensors/sensor_hub.dart';
 import 'core/sync/pocketbase_service.dart';
 import 'core/audio/voice_alert_service.dart';
 import 'core/rules/rule_service.dart';
+import 'core/telemetry/ride_report_service.dart';
 import 'core/trip/trip_manager.dart';
 import 'core/logger/app_logger.dart';
 import 'core/pip/pip_manager.dart';
@@ -47,6 +48,9 @@ void main() async {
     // Initialize Voice Alert Engine & Trip Manager
     await VoiceAlertService().init();
     await TripManager().init(pbService: pbService);
+
+    // Sprint 4: emergency contact for the crash composer
+    await RideReportService().init();
 
     // Background auto-login to PocketBase
     pbService.autoLogin();

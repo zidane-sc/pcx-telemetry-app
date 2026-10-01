@@ -34,6 +34,33 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- Sprint 4: sharing the ride report PDF. Android 7+ forbids handing
+             another app a file:// URI (FileUriExposedException), so the file is
+             exposed through a content:// provider scoped to the cache dir. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Package visibility (Android 11+): without these, resolving an SMS
+             app returns nothing and openSmsDraft silently fails. -->
+        <queries>
+            <intent>
+                <action android:name="android.intent.action.SEND" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:scheme="smsto" />
+            </intent>
+        </queries>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

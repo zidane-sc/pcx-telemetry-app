@@ -7,6 +7,7 @@ import '../../core/trip/trip_manager.dart';
 import '../../core/vehicle/vehicle_manager.dart';
 import '../../core/map/offline_map_downloader.dart';
 import '../../core/rules/rule_service.dart';
+import '../../core/telemetry/ride_report_service.dart';
 import '../vehicle/vehicle_picker_sheet.dart';
 import '../garage/fuel_log_sheet.dart';
 import '../garage/rule_editor_sheet.dart';
@@ -572,6 +573,71 @@ class _GarageScreenState extends State<GarageScreen> {
 
           const SizedBox(height: 8),
 
+          // Sprint 4: the crash SMS composer needs a number. Without one the
+          // button silently does nothing, which is worse than not offering it.
+          Builder(
+            builder: (context) {
+              final contact = RideReportService().emergencyContact;
+              return InkWell(
+                onTap: () => _editEmergencyContact(context),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0C1017),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        contact.isEmpty
+                            ? Icons.contact_phone_outlined
+                            : Icons.contact_phone,
+                        color: contact.isEmpty
+                            ? Colors.white30
+                            : const Color(0xFF00E5FF),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Kontak Darurat',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              contact.isEmpty
+                                  ? 'Belum diisi - fitur SMS tidak aktif'
+                                  : contact,
+                              style: TextStyle(
+                                color: contact.isEmpty
+                                    ? Colors.amber
+                                    : Colors.white38,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right,
+                          color: Colors.white30, size: 20),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 10),
+
           Builder(
             builder: (context) {
               final enabledCount = RuleService()
@@ -819,6 +885,86 @@ class _GarageScreenState extends State<GarageScreen> {
         ],
       ),
     );
+  }
+
+  /// Sprint 4: edit the emergency contact used by the crash SMS composer.
+  ///
+  /// Parked in Garasi, never the cockpit. A number typed at 100 km/h is a
+  /// wrong number, and a wrong number in this field texts a stranger.
+  Future<void> _editEmergencyContact(BuildContext context) async {
+    final controller =
+        TextEditingController(text: RideReportService().emergencyContact);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        title: const Text(
+          'KONTAK DARURAT',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Nomor ini hanya dipakai untuk menyiippetkan SMS '
+              'setelah deteksi kecelakaan. Aplikasi tidak pernah mengirim '
+              'otomatis - Anda tetap menekan tombol kirim.',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              autofocus: true,
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'monospace',
+                fontSize: 16,
+              ),
+              decoration: InputDecoration(
+                hintText: '08123456789',
+                hintStyle: const TextStyle(color: Colors.white24),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.white12),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.white12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal',
+                style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Simpan',
+                style: TextStyle(color: Color(0xFF00E5FF))),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      await RideReportService().setEmergencyContact(controller.text);
+      if (mounted) setState(() {});
+    }
+    controller.dispose();
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {

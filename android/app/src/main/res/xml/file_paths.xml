@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sprint 4: FileProvider scopes. The ride report PDF is written to the app's
+  own cache directory, so only that path needs to be shareable.
+
+  Keep this list minimal. A broad entry (files-path, external-path) hands the
+  provider read access to the whole filesystem for the life of the app.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="ride_reports" path="ride_reports/" />
+</paths>

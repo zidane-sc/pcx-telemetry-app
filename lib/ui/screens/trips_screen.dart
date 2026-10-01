@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+import '../../core/telemetry/ride_report_service.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/trip/polyline_encoder.dart';
 import '../common/cyber_map_tiles.dart';
@@ -671,6 +672,27 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                 ),
                 Row(
                   children: [
+                    // Sprint 4: the PDF report goes to WhatsApp, Telegram,
+                    // email — anywhere with a real share sheet. The IG story card
+                    // below is for social; this is for archiving.
+                    IconButton(
+                      icon: const Icon(Icons.picture_as_pdf, color: Color(0xFF00E5FF), size: 18),
+                      tooltip: 'Bagikan Laporan PDF',
+                      onPressed: () async {
+                        final ok = await RideReportService().shareReport(widget.item);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(ok
+                                ? 'Laporan PDF siap dibagikan'
+                                : 'Gagal membuat laporan PDF'),
+                            backgroundColor:
+                                ok ? const Color(0xFF00FF66) : Colors.redAccent,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                    ),
                     IconButton(
                       icon: const Icon(Icons.share, color: Color(0xFF00E5FF), size: 18),
                       tooltip: 'Bagikan Story & Export GPX',
