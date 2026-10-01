@@ -12,6 +12,7 @@ import 'core/fuel/fuel_log_manager.dart';
 import 'core/garage/expense_ledger.dart';
 import 'core/telemetry/ride_report_service.dart';
 import 'core/trip/trip_manager.dart';
+import 'ui/theme/theme_service.dart';
 import 'core/logger/app_logger.dart';
 import 'core/pip/pip_manager.dart';
 import 'core/vehicle/vehicle_manager.dart';
@@ -47,6 +48,9 @@ void main() async {
     // Sprint 5: cost-of-ownership ledger and the fuel log it shares data with.
     await FuelLogManager().initialize();
     await ExpenseLedger().initialize();
+
+    // Sprint 7: cockpit colour slot
+    await ThemeService().initialize();
 
     // Configure lean sensor state based on active vehicle
     sensorHub.setLeanEnabled(VehicleManager().activeVehicle.hasLeanSensor);
@@ -118,15 +122,18 @@ class _PcxTelemetryAppState extends State<PcxTelemetryApp> {
           surface: Color(0xFF0C1017),
         ),
       ),
-      home: PiPSwitcher(
+      home: ThemeScope(
+        service: ThemeService(),
+        child: PiPSwitcher(
         childWhenDisabled: HomeScreen(
           obdService: widget.obdService,
           sensorHub: widget.sensorHub,
           pbService: widget.pbService,
         ),
-        childWhenEnabled: MiniPipCockpit(
-          obdService: widget.obdService,
-          sensorHub: widget.sensorHub,
+          childWhenEnabled: MiniPipCockpit(
+            obdService: widget.obdService,
+            sensorHub: widget.sensorHub,
+          ),
         ),
       ),
     );

@@ -21,6 +21,7 @@ import '../../core/vehicle/vehicle_manager.dart';
 import '../../core/telemetry/performance_box.dart';
 import '../../core/telemetry/dyno_power_calculator.dart';
 import '../navigation/search_destination_sheet.dart';
+import '../theme/theme_service.dart';
 import '../navigation/navigation_turn_banner.dart';
 import '../navigation/cockpit_map_view.dart';
 import '../vehicle/vehicle_picker_sheet.dart';
@@ -61,7 +62,6 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
   // Navigation UI State
   bool _isInlineMapVisible = true;
-  bool _isSunGlareMode = false;
 
   @override
   void initState() {
@@ -719,8 +719,11 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ThemeScope subscription: changing the slot rebuilds this whole screen,
+    // which is what a cockpit theme swap should do anyway.
+    final themeSlot = ThemeScope.slotOf(context);
     return Scaffold(
-      backgroundColor: _isSunGlareMode ? const Color(0xFFF1F5F9) : const Color(0xFF080B11),
+      backgroundColor: themeSlot.background,
       body: SafeArea(
         child: OrientationBuilder(
           builder: (context, orientation) {
@@ -762,8 +765,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
       totalMassKg: activeVeh.type == VehicleType.motorcycle ? 202.0 : 1100.0,
     );
 
-    final Color mainTextColor = _isSunGlareMode ? Colors.black : Colors.white;
-    final Color pillBgColor = _isSunGlareMode ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
+    final themeSlot = ThemeScope.slotOf(context);
+    final Color mainTextColor = themeSlot.text;
+    final Color pillBgColor = themeSlot.surface;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
@@ -1112,7 +1116,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
   }
 
   // ULTRA CLEAN TOP STATUS BAR (Un-cluttered, breathing room)
-  Widget _buildCleanTopBar(VehicleProfile activeVeh, bool isOverheat, bool isLowBatt) {
+  Widget _buildCleanTopBar(
+      VehicleProfile activeVeh, bool isOverheat, bool isLowBatt) {
+    final themeSlot = ThemeScope.slotOf(context);
     final bool isBike = activeVeh.type == VehicleType.motorcycle;
     final bool isObdConnected = widget.obdService.state == ObdConnectionState.connected;
 
@@ -1222,17 +1228,21 @@ class _CockpitScreenState extends State<CockpitScreen> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Sun Glare Mode Toggle Button
+            // Sprint 7: one button cycles the whole theme. A rider in a
+            // helmet should not have to open a menu to make the dashboard
+            // legible, so this is a cycle rather than a picker here.
             IconButton(
               icon: Icon(
-                _isSunGlareMode ? Icons.wb_sunny : Icons.wb_sunny_outlined,
-                color: _isSunGlareMode ? const Color(0xFFFFB300) : Colors.white38,
+                themeSlot.isLight ? Icons.wb_sunny : Icons.dark_mode_outlined,
+                color: themeSlot.isLight
+                    ? const Color(0xFFE65100)
+                    : Colors.white38,
                 size: 18,
               ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              tooltip: 'Mode Siang Terik (Sun Glare)',
-              onPressed: () => setState(() => _isSunGlareMode = !_isSunGlareMode),
+              tooltip: 'Tema: ${themeSlot.label}',
+              onPressed: () => ThemeScope.of(context).cycle(),
             ),
 
             // Search POI Button
