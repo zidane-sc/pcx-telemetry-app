@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 
+import '../../core/telemetry/lean_estimator.dart';
+
 class LeanAngleGauge extends StatelessWidget {
   final double currentAngle; // Negative = Left, Positive = Right
   final double maxLeft;
   final double maxRight;
+
+  /// Sprint 2: the full reading with provenance. When null the gauge shows the
+  /// IMU figure alone and labels it as unverified — it must never imply a
+  /// cross-check that did not happen.
+  final LeanReading? reading;
 
   const LeanAngleGauge({
     super.key,
     required this.currentAngle,
     this.maxLeft = 0.0,
     this.maxRight = 0.0,
+    this.reading,
   });
 
   @override
@@ -95,8 +103,80 @@ class LeanAngleGauge extends StatelessWidget {
               ),
             ),
           ),
+
+          // Sprint 2: provenance line. Two numbers where a single number would
+          // look cleaner, because a single number here is a claim the app cannot
+          // support. `degraded` states the reading is untrustworthy outright.
+          if (reading != null) ...[
+            const SizedBox(height: 5),
+            _ProvenanceRow(reading: reading!),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// Shows where the displayed angle came from, and whether to believe it.
+class _ProvenanceRow extends StatelessWidget {
+  final LeanReading reading;
+  const _ProvenanceRow({required this.reading});
+
+  @override
+  Widget build(BuildContext context) {
+    final bool degraded = reading.confidence == LeanConfidence.degraded;
+    final bool dual = reading.confidence == LeanConfidence.dualSource;
+    final Color tone =
+        degraded ? Colors.redAccent : (dual ? Colors.white54 : Colors.white38);
+
+    final TextStyle mono = TextStyle(
+      color: tone,
+      fontSize: 9,
+      fontFamily: 'monospace',
+      fontWeight: FontWeight.bold,
+    );
+
+    final gps = reading.gpsDeg;
+    final camber = reading.camberDeg;
+
+    if (gps == null) {
+      // Only the IMU. Say so rather than implying a cross-check.
+      return Row(
+        children: [
+          Text('IMU ${reading.imuDeg.abs().toStringAsFixed(0)}°', style: mono),
+          const SizedBox(width: 6),
+          Text(
+            dual ? '' : '· GPS OFF',
+            style: mono.copyWith(color: Colors.white24),
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Text('IMU ${reading.imuDeg.abs().toStringAsFixed(0)}°', style: mono),
+        const SizedBox(width: 6),
+        Text(
+          '· GPS ${gps.abs().toStringAsFixed(0)}°'
+          '${reading.radiusM != null ? ' r=${reading.radiusM!.round()}m' : ''}',
+          style: mono,
+        ),
+        if (camber != null && camber.abs() >= 1.0) ...[
+          const SizedBox(width: 6),
+          Text(
+            '· CAMBER ${camber > 0 ? '+' : ''}${camber.toStringAsFixed(0)}°',
+            style: mono.copyWith(
+              color: degraded ? Colors.redAccent : const Color(0xFF9E9E9E),
+            ),
+          ),
+        ],
+        if (degraded) ...[
+          const SizedBox(width: 6),
+          const Icon(Icons.warning_amber_rounded,
+              size: 10, color: Colors.redAccent),
+        ],
+      ],
     );
   }
 }

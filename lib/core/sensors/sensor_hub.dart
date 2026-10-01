@@ -5,6 +5,8 @@ import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
+import '../telemetry/lean_estimator.dart';
+
 class SensorHubData {
   final double latitude;
   final double longitude;
@@ -17,7 +19,12 @@ class SensorHubData {
   final double slopePercent; // Incline gradient (+% climb, -% descent)
   final bool potholeDetected; // Road shock impulse event
 
-  const SensorHubData({
+  /// Sprint 2: IMU + GPS-geometry lean with provenance. Defaults to an
+  /// `imuOnly` reading so a hand-built SensorHubData (tests, offline replay)
+  /// never has to invent a GPS figure.
+  final LeanReading lean;
+
+  SensorHubData({
     required this.latitude,
     required this.longitude,
     required this.altitude,
@@ -28,9 +35,11 @@ class SensorHubData {
     this.accelerationMps2 = 0.0,
     this.slopePercent = 0.0,
     this.potholeDetected = false,
-  });
+    LeanReading? lean,
+  }) : lean = lean ??
+            LeanReading(imuDeg: rollAngleDeg, confidence: LeanConfidence.imuOnly);
 
-  factory SensorHubData.empty() => const SensorHubData(
+  static SensorHubData empty() => SensorHubData(
         latitude: 0.0,
         longitude: 0.0,
         altitude: 0.0,
@@ -72,6 +81,14 @@ class SensorHub {
   double? _prevLatForSlope;
   double? _prevLngForSlope;
 
+  /// Rolling window of the last 3 GPS fixes for corner-radius estimation.
+  /// Sprint 2. A 3-point circumscribed circle is the minimum needed to
+  /// resolve curvature; 2 points cannot distinguish a straight line from a
+  /// gentle arc.
+  final List<double> _latWindow = [];
+  final List<double> _lngWindow = [];
+  double _curvatureRadiusM = double.nan;
+
   bool _isLandscape = false;
   bool _enableLean = true;
 
@@ -93,6 +110,10 @@ class SensorHub {
     _enableLean = enabled;
     if (!enabled) {
       _filteredRoll = 0.0;
+      // A car has no lean angle. Clearing the curvature radius too means the
+      // reading falls back to `imuOnly` at 0.0° rather than carrying a stale
+      // motorcycle corner radius into the car profile.
+      _curvatureRadiusM = double.nan;
     }
   }
 
@@ -112,6 +133,11 @@ class SensorHub {
         accelerationMps2: _accelerationMps2,
         slopePercent: _slopePercent,
         potholeDetected: _potholeDetected,
+        lean: LeanEstimator.fromSources(
+          imuDeg: _filteredRoll,
+          speedKmh: _currentGpsSpeed,
+          radiusM: _curvatureRadiusM.isNaN ? null : _curvatureRadiusM,
+        ),
       );
 
   Future<void> start() async {
@@ -187,6 +213,25 @@ class SensorHub {
             final diff = ((pos.heading - _currentHeading + 180.0) % 360.0) - 180.0;
             _currentHeading = (_currentHeading + diff * 0.22) % 360.0;
             if (_currentHeading < 0) _currentHeading += 360.0;
+          }
+
+          // Sprint 2: corner radius from a 3-point circumscribed circle.
+          _latWindow.add(pos.latitude);
+          _lngWindow.add(pos.longitude);
+          if (_latWindow.length > 3) {
+            _latWindow.removeAt(0);
+            _lngWindow.removeAt(0);
+          }
+          if (_latWindow.length == 3) {
+            _curvatureRadiusM = LeanEstimator.radiusFromFixes(
+                  lat1: _latWindow[0],
+                  lon1: _lngWindow[0],
+                  lat2: _latWindow[1],
+                  lon2: _lngWindow[1],
+                  lat3: _latWindow[2],
+                  lon3: _lngWindow[2],
+                ) ??
+                double.nan;
           }
         });
       }

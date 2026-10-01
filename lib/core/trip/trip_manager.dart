@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/telemetry_data.dart';
 import '../sensors/sensor_hub.dart';
+import '../telemetry/lean_estimator.dart';
 import '../sync/pocketbase_service.dart';
 import 'polyline_encoder.dart';
 
@@ -153,6 +154,10 @@ class TripManager extends ChangeNotifier {
   // Running telemetry states for adaptive timeline
   double _latestSpeed = 0.0;
   double _latestLean = 0.0;
+
+  /// Sprint 2: full lean reading with provenance, mirrored from SensorHubData so
+  /// the periodic keyframer can persist it without re-deriving anything.
+  LeanReading? _latestLeanReading;
   double _latestLat = 0.0;
   double _latestLng = 0.0;
   double _latestAlt = 0.0;
@@ -286,6 +291,10 @@ class TripManager extends ChangeNotifier {
           }
 
           if (shouldSave) {
+            // Sprint 2: store the second lean estimate and the divergence.
+            // Old trips lack these keys, so the playback reader must treat a
+            // missing 'leanGps' as "no cross-check recorded", never as 0.
+            final lean = _latestLeanReading;
             _timelineSnapshots.add({
               't': curSec,
               'lat': double.parse(_latestLat.toStringAsFixed(5)),
@@ -293,6 +302,9 @@ class TripManager extends ChangeNotifier {
               'spd': _latestSpeed.round(),
               'lean': _latestLean.round(),
               'alt': _latestAlt.round(),
+              if (lean != null) 'leanGps': lean.gpsDeg?.round(),
+              if (lean != null) 'leanCam': lean.camberDeg?.round(),
+              if (lean != null) 'leanConf': lean.confidence.name,
             });
             _lastSavedSec = curSec;
             _lastSavedSpeed = _latestSpeed;
@@ -319,6 +331,7 @@ class TripManager extends ChangeNotifier {
 
     _latestSpeed = speed;
     _latestLean = sensorData.rollAngleDeg;
+    _latestLeanReading = sensorData.lean;
     _latestLat = sensorData.latitude;
     _latestLng = sensorData.longitude;
     _latestAlt = sensorData.altitude;

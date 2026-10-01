@@ -870,6 +870,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
               currentAngle: _currentSensor.rollAngleDeg,
               maxLeft: tripMgr.maxLeanLeft,
               maxRight: tripMgr.maxLeanRight,
+              reading: _currentSensor.lean,
             ),
           const SizedBox(height: 8),
 
@@ -1038,6 +1039,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                                 currentAngle: _currentSensor.rollAngleDeg,
                                 maxLeft: tripMgr.maxLeanLeft,
                                 maxRight: tripMgr.maxLeanRight,
+                                reading: _currentSensor.lean,
                               ),
                             _buildUnifiedTelemetryRibbon(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt, activeVeh),
                           ],

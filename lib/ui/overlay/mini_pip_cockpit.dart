@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/bluetooth/obd_service.dart';
 import '../../core/models/telemetry_data.dart';
 import '../../core/sensors/sensor_hub.dart';
+import '../../core/telemetry/lean_estimator.dart';
 import '../../core/trip/trip_manager.dart';
 
 class MiniPipCockpit extends StatefulWidget {
@@ -130,14 +131,31 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                             ),
                             _buildPipMetric(
                               label: 'SUHU',
-                              value: isObdLive ? '${_currentFrame.ectC.toStringAsFixed(0)}°C' : '88°C',
-                              color: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF),
+                              // Honesty rule: no placeholder when the ECU is
+                              // silent. This used to print a hardcoded 88°C,
+                              // which reads as a real overheat warning.
+                              value: isObdLive
+                                  ? '${_currentFrame.ectC.toStringAsFixed(0)}°C'
+                                  : '--',
+                              color: isObdLive
+                                  ? (isOverheat
+                                      ? Colors.redAccent
+                                      : const Color(0xFF00E5FF))
+                                  : Colors.white24,
                             ),
                             _buildPipMetric(
                               label: 'REBAH',
+                              // A trailing marker flags that the two lean
+                              // sources disagree, so the rider knows the number
+                              // is not to be trusted. The PiP is too small for
+                              // both figures; the cockpit gauge shows them.
                               value:
-                                  '${_currentSensor.rollAngleDeg.abs().toStringAsFixed(0)}° ${_currentSensor.rollAngleDeg < -1.5 ? 'L' : (_currentSensor.rollAngleDeg > 1.5 ? 'R' : 'CVR')}',
-                              color: const Color(0xFF7C4DFF),
+                                  '${_currentSensor.rollAngleDeg.abs().toStringAsFixed(0)}° ${_currentSensor.rollAngleDeg < -1.5 ? 'L' : (_currentSensor.rollAngleDeg > 1.5 ? 'R' : 'CVR')}'
+                                  '${_currentSensor.lean.confidence == LeanConfidence.degraded ? ' *' : ''}',
+                              color: _currentSensor.lean.confidence ==
+                                      LeanConfidence.degraded
+                                  ? Colors.redAccent
+                                  : const Color(0xFF7C4DFF),
                             ),
                           ],
                         ),
