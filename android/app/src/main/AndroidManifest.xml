@@ -48,21 +48,23 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Package visibility (Android 11+): without these, resolving an SMS
-             app returns nothing and openSmsDraft silently fails. -->
-        <queries>
-            <intent>
-                <action android:name="android.intent.action.SEND" />
-                <data android:mimeType="*/*" />
-            </intent>
-            <intent>
-                <action android:name="android.intent.action.VIEW" />
-                <data android:scheme="smsto" />
-            </intent>
-        </queries>
-
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
+
+    <!-- Package visibility (Android 11+ / API 30): without this, resolving an
+         SMS app returns nothing and openSmsDraft silently fails.
+         <queries> is a direct child of <manifest>, NOT of <application> —
+         AAPT rejects it there with "unexpected element <queries>". -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="smsto" />
+        </intent>
+    </queries>
 </manifest>
