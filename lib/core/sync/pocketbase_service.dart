@@ -185,4 +185,33 @@ class PocketBaseService {
       return false;
     }
   }
+
+  Future<bool> syncMaintenanceRecord({
+    required String component,
+    required double lastServiceKm,
+    required double nextServiceKm,
+    required String status,
+  }) async {
+    if (!isAuthenticated || currentVehicleId == null) {
+      await autoLogin();
+    }
+    if (!isAuthenticated || currentVehicleId == null) return false;
+
+    try {
+      await pb.collection(ApiConstants.collectionMaintenance).create(
+        body: {
+          'user': currentUserId,
+          'vehicle': currentVehicleId,
+          'component': component,
+          'last_service_km': lastServiceKm,
+          'next_service_km': nextServiceKm,
+          'status': status,
+        },
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[PBService] Sync Maintenance error: $e');
+      return false;
+    }
+  }
 }

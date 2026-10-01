@@ -9,6 +9,7 @@ class SensorHubData {
   final double longitude;
   final double altitude;
   final double gpsSpeedKmh;
+  final double headingDeg; // Direction of travel (0-360°)
   final double rollAngleDeg; // Lean angle (Left negative, Right positive)
   final double gForce;
 
@@ -17,6 +18,7 @@ class SensorHubData {
     required this.longitude,
     required this.altitude,
     required this.gpsSpeedKmh,
+    required this.headingDeg,
     required this.rollAngleDeg,
     required this.gForce,
   });
@@ -26,6 +28,7 @@ class SensorHubData {
         longitude: 0.0,
         altitude: 0.0,
         gpsSpeedKmh: 0.0,
+        headingDeg: 0.0,
         rollAngleDeg: 0.0,
         gForce: 0.0,
       );
@@ -44,6 +47,7 @@ class SensorHub {
   double _currentLng = 0.0;
   double _currentAlt = 0.0;
   double _currentGpsSpeed = 0.0;
+  double _currentHeading = 0.0;
   double _filteredRoll = 0.0;
   double _currentG = 0.0;
 
@@ -57,6 +61,7 @@ class SensorHub {
         longitude: _currentLng,
         altitude: _currentAlt,
         gpsSpeedKmh: _currentGpsSpeed,
+        headingDeg: _currentHeading,
         rollAngleDeg: _filteredRoll,
         gForce: _currentG,
       );
@@ -93,8 +98,14 @@ class SensorHub {
           _currentLat = pos.latitude;
           _currentLng = pos.longitude;
           _currentAlt = pos.altitude;
-          // pos.speed is in m/s; convert to km/h. Ignore negative speeds from invalid fixes.
-          _currentGpsSpeed = pos.speed > 0 ? pos.speed * 3.6 : 0.0;
+          // pos.speed is in m/s; convert to km/h.
+          final spd = pos.speed > 0 ? pos.speed * 3.6 : 0.0;
+          _currentGpsSpeed = spd;
+
+          // Update heading if vehicle is moving to avoid stationary jitter
+          if (spd > 2.5 && pos.heading >= 0.0) {
+            _currentHeading = pos.heading;
+          }
         });
       }
     } catch (e) {
@@ -104,9 +115,6 @@ class SensorHub {
     // 2. Smooth Lean Angle from IMU Accelerometer
     try {
       _accelSub = accelerometerEventStream().listen((event) {
-        // Motorcycle tilt logic:
-        // When bike is upright on holder, gravity pulls down mostly along Y or Z.
-        // Tilting left/right displaces gravity into X.
         final double magnitudeYZ =
             sqrt(event.y * event.y + event.z * event.z);
         final double rawRollRad = atan2(event.x, magnitudeYZ);

@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,22 +25,46 @@ class CockpitMapView extends StatefulWidget {
 class _CockpitMapViewState extends State<CockpitMapView> {
   final MapController _mapController = MapController();
   bool _followMotorcycle = true;
+  bool _courseUp = false; // False = North Up, True = Course Up (rotates with bike heading)
 
   @override
   void didUpdateWidget(covariant CockpitMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_followMotorcycle &&
-        widget.sensorData.latitude != 0.0 &&
+
+    if (widget.sensorData.latitude != 0.0 &&
         widget.sensorData.longitude != 0.0) {
-      _mapController.move(
-        LatLng(widget.sensorData.latitude, widget.sensorData.longitude),
-        _mapController.camera.zoom,
-      );
+      final motorPos =
+          LatLng(widget.sensorData.latitude, widget.sensorData.longitude);
+
+      if (_followMotorcycle) {
+        _mapController.move(motorPos, _mapController.camera.zoom);
+      }
+
+      // Rotate map smoothly in Course Up mode when bike is moving
+      if (_courseUp && widget.sensorData.gpsSpeedKmh > 2.0) {
+        _mapController.rotate(-widget.sensorData.headingDeg);
+      }
     }
   }
 
+  void _toggleCourseUp() {
+    setState(() {
+      _courseUp = !_courseUp;
+      if (!_courseUp) {
+        _mapController.rotate(0.0); // Reset to North Up
+      } else if (widget.sensorData.headingDeg >= 0) {
+        _mapController.rotate(-widget.sensorData.headingDeg);
+      }
+    });
+  }
+
   void _fitRouteBounds() {
-    setState(() => _followMotorcycle = false);
+    setState(() {
+      _followMotorcycle = false;
+      _courseUp = false;
+      _mapController.rotate(0.0);
+    });
+
     final route = widget.navMgr.currentRoute;
     if (route != null && route.polyline.isNotEmpty) {
       final bounds = LatLngBounds.fromPoints(route.polyline);
@@ -70,8 +95,15 @@ class _CockpitMapViewState extends State<CockpitMapView> {
 
     final LatLng motorPos = LatLng(
       widget.sensorData.latitude != 0.0 ? widget.sensorData.latitude : -6.2088,
-      widget.sensorData.longitude != 0.0 ? widget.sensorData.longitude : 106.8456,
+      widget.sensorData.longitude != 0.0
+          ? widget.sensorData.longitude
+          : 106.8456,
     );
+
+    // In North Up, rotate arrow by heading; in Course Up, arrow points straight forward
+    final double markerRotationRad = _courseUp
+        ? 0.0
+        : (widget.sensorData.headingDeg * (pi / 180.0));
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -106,7 +138,7 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                 },
               ),
               children: [
-                // 1. Authentic CARTO Dark Matter Retina Basemap
+                // 1. CARTO Dark Matter Retina Basemap with Disk Caching
                 CyberMapTiles.buildTileLayer(),
 
                 // 2. High-Visibility Double-Layer Neon Glow Route
@@ -146,15 +178,19 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                               shape: BoxShape.circle,
                               color: const Color(0xFF00FF66).withOpacity(0.25),
                               border: Border.all(
-                                color: const Color(0xFF00FF66).withOpacity(0.6),
+                                color:
+                                    const Color(0xFF00FF66).withOpacity(0.6),
                                 width: 1.5,
                               ),
                             ),
                           ),
-                          const Icon(
-                            Icons.navigation,
-                            color: Color(0xFF00FF66),
-                            size: 20,
+                          Transform.rotate(
+                            angle: markerRotationRad,
+                            child: const Icon(
+                              Icons.navigation,
+                              color: Color(0xFF00FF66),
+                              size: 20,
+                            ),
                           ),
                         ],
                       ),
@@ -189,10 +225,26 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                   // Center / Follow Toggle Button
                   _buildControlPill(
                     icon: Icons.my_location,
-                    color: _followMotorcycle ? const Color(0xFF00FF66) : Colors.white70,
+                    color: _followMotorcycle
+                        ? const Color(0xFF00FF66)
+                        : Colors.white70,
                     isActive: _followMotorcycle,
                     tooltip: 'Ikuti Posisi Motor',
                     onTap: _centerMotorcycle,
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Course Up vs North Up Toggle
+                  _buildControlPill(
+                    icon: _courseUp ? Icons.navigation : Icons.explore,
+                    color: _courseUp
+                        ? const Color(0xFF00FF66)
+                        : const Color(0xFF00E5FF),
+                    isActive: _courseUp,
+                    tooltip: _courseUp
+                        ? 'Mode Course Up (Muter Mengikuti Arah Motor)'
+                        : 'Mode North Up (Utara Selalu di Atas)',
+                    onTap: _toggleCourseUp,
                   ),
                   const SizedBox(height: 6),
 

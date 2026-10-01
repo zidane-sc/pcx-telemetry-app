@@ -45,7 +45,9 @@ class _HomeScreenState extends State<HomeScreen> {
       DiagnosticsScreen(
         obdService: widget.obdService,
       ),
-      const MaintenanceScreen(),
+      MaintenanceScreen(
+        pbService: widget.pbService,
+      ),
       const TripsScreen(),
     ];
   }
