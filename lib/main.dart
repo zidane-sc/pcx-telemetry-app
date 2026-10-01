@@ -8,6 +8,8 @@ import 'core/sensors/sensor_hub.dart';
 import 'core/sync/pocketbase_service.dart';
 import 'core/audio/voice_alert_service.dart';
 import 'core/rules/rule_service.dart';
+import 'core/fuel/fuel_log_manager.dart';
+import 'core/garage/expense_ledger.dart';
 import 'core/telemetry/ride_report_service.dart';
 import 'core/trip/trip_manager.dart';
 import 'core/logger/app_logger.dart';
@@ -41,6 +43,10 @@ void main() async {
     // Initialize Vehicle Manager & Performance Box
     await VehicleManager().initialize();
     await PerformanceBox().initialize();
+
+    // Sprint 5: cost-of-ownership ledger and the fuel log it shares data with.
+    await FuelLogManager().initialize();
+    await ExpenseLedger().initialize();
 
     // Configure lean sensor state based on active vehicle
     sensorHub.setLeanEnabled(VehicleManager().activeVehicle.hasLeanSensor);

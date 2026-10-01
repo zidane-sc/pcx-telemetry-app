@@ -6,9 +6,11 @@ import '../../core/sync/pocketbase_service.dart';
 import '../../core/trip/trip_manager.dart';
 import '../../core/vehicle/vehicle_manager.dart';
 import '../../core/map/offline_map_downloader.dart';
+import '../../core/garage/expense_ledger.dart';
 import '../../core/rules/rule_service.dart';
 import '../../core/telemetry/ride_report_service.dart';
 import '../vehicle/vehicle_picker_sheet.dart';
+import '../garage/expense_entry_sheet.dart';
 import '../garage/fuel_log_sheet.dart';
 import '../garage/rule_editor_sheet.dart';
 
@@ -569,6 +571,147 @@ class _GarageScreenState extends State<GarageScreen> {
           const SizedBox(height: 18),
 
           // 2. Pre-Ride Checklist Section Header
+          // Sprint 5: cost of ownership. Fuel fill-ups land here automatically from
+          // the fuel log, so this sheet is for everything else.
+          const SizedBox(height: 18),
+
+          _buildSectionHeader('BIAYA PEMILIKAN', Icons.account_balance_wallet),
+
+          const SizedBox(height: 8),
+
+          AnimatedBuilder(
+            animation: ExpenseLedger(),
+            builder: (context, _) {
+              final ledger = ExpenseLedger();
+              final perKm = ledger.costPerKm();
+              final months = ledger.monthlyBreakdown(months: 1);
+
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0C1017),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.payments_outlined,
+                            color: Color(0xFF00E5FF), size: 18),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Total tercatat',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.45),
+                                  fontSize: 11,
+                                ),
+                              ),
+                              Text(
+                                'Rp ${_formatIdr(ledger.totalIdr)}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Bulan ini',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.45),
+                                fontSize: 10,
+                              ),
+                            ),
+                            Text(
+                              months.isEmpty
+                                  ? 'Rp 0'
+                                  : 'Rp ${_formatIdr(months.first.total)}',
+                              style: const TextStyle(
+                                color: Color(0xFF00FF66),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    // Cost per km stays hidden until there is enough history to
+                    // be honest about it. Showing Rp 0/km on a fresh install
+                    // reads as "this bike is free to run".
+                    if (perKm != null) ...[
+                      const SizedBox(height: 12),
+                      Divider(color: Colors.white10, height: 1),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Text(
+                            'Rp ${_formatIdr(perKm)} / km',
+                            style: const TextStyle(
+                              color: Color(0xFFFFB300),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${ledger.entries.length} catatan',
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(0.35),
+                                fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color(0xFF00E5FF).withOpacity(0.12),
+                          foregroundColor: const Color(0xFF00E5FF),
+                          elevation: 0,
+                          side: const BorderSide(
+                              color: Color(0xFF00E5FF), width: 1),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => ExpenseEntrySheet.show(
+                          context,
+                          currentOdometer: totalOdo,
+                        ),
+                        icon: const Icon(Icons.add_card, size: 16),
+                        label: const Text(
+                          'CATAT PENGELUARAN',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 20),
+
           _buildSectionHeader('ATURAN PERINGATAN (TRIGGER → ACTION)', Icons.tune),
 
           const SizedBox(height: 8),
@@ -965,6 +1108,18 @@ class _GarageScreenState extends State<GarageScreen> {
       if (mounted) setState(() {});
     }
     controller.dispose();
+  }
+
+  /// Indonesian thousands separator: 1.250.000 reads as a million-and-a-bit to
+  /// anyone here, where 1,250,000 does not.
+  String _formatIdr(double v) {
+    final s = v.round().toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return buf.toString();
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {

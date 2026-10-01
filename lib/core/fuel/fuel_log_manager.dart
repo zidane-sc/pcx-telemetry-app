@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../sync/pocketbase_service.dart';
+
+import '../garage/expense_ledger.dart';
 
 class FuelLogEntry {
   final String id;
@@ -95,7 +98,6 @@ class FuelLogManager extends ChangeNotifier {
     required double pricePerLiter,
     required String fuelType,
     required bool isFullTank,
-    PocketBaseService? pbService,
   }) async {
     final double totalCost = liters * pricePerLiter;
     double? calculatedKml;
@@ -128,13 +130,22 @@ class FuelLogManager extends ChangeNotifier {
     await _save();
     notifyListeners();
 
-    // Sync to PocketBase
-    pbService?.syncMaintenanceRecord(
-      component: 'fuel_fillup',
-      lastServiceKm: odometerKm,
-      nextServiceKm: odometerKm + (liters * 45.0),
-      status: 'Rp ${totalCost.toStringAsFixed(0)} ($fuelType)',
-    );
+    // A fill-up is a running-cost record, not a service event. The old code
+    // pushed `odometerKm + (liters * 45.0)` as next_service_km, which is fuel
+    // range dressed up as a service interval — it made every fill-up look like
+    // a maintenance milestone in the timeline.
+    //
+    // The cost also lands in the expense ledger, so the Garage can answer
+    // "what does this bike cost me" without the rider entering it twice.
+    //
+    // ponytail: the ledger is local-first like everything else. Wire a real
+    // expense_entry collection when the Garage sync is worth the round trip.
+    unawaited(ExpenseLedger().add(
+      category: ExpenseCategory.fuel,
+      amountIdr: totalCost,
+      odometerKm: odometerKm,
+      note: fuelType,
+    ));
   }
 
   Future<void> _save() async {

@@ -75,7 +75,6 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
       pricePerLiter: price,
       fuelType: _fuelType,
       isFullTank: _isFullTank,
-      pbService: widget.pbService,
     );
 
     if (mounted) {
