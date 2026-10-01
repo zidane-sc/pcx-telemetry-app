@@ -10,6 +10,8 @@ import 'core/audio/voice_alert_service.dart';
 import 'core/trip/trip_manager.dart';
 import 'core/logger/app_logger.dart';
 import 'core/pip/pip_manager.dart';
+import 'core/vehicle/vehicle_manager.dart';
+import 'core/telemetry/performance_box.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/overlay/mini_pip_cockpit.dart';
 
@@ -33,6 +35,13 @@ void main() async {
 
     // Initialize Global Crash Logger (Sentry Mini) immediately
     AppLogger().initialize(pb: pbService.pb);
+
+    // Initialize Vehicle Manager & Performance Box
+    await VehicleManager().initialize();
+    await PerformanceBox().initialize();
+
+    // Configure lean sensor state based on active vehicle
+    sensorHub.setLeanEnabled(VehicleManager().activeVehicle.hasLeanSensor);
 
     // Initialize Voice Alert Engine & Trip Manager
     await VoiceAlertService().init();
@@ -89,30 +98,26 @@ class _PcxTelemetryAppState extends State<PcxTelemetryApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'PCX Telemetry',
+      title: 'PCX Cyber Telemetry',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0A0E17),
-        primaryColor: const Color(0xFF00E5FF),
-        textTheme: GoogleFonts.rajdhaniTextTheme(
-          ThemeData(brightness: Brightness.dark).textTheme,
-        ),
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF080B11),
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF00E5FF),
           secondary: Color(0xFF00FF66),
-          surface: Color(0xFF131B2E),
+          surface: Color(0xFF0C1017),
         ),
       ),
-      home: PiPSwitcher(
-        childWhenDisabled: HomeScreen(
+      home: PiPBuilder(
+        builder: (context) => MiniPipCockpit(
+          obdService: widget.obdService,
+          sensorHub: widget.sensorHub,
+        ),
+        child: HomeScreen(
           obdService: widget.obdService,
           sensorHub: widget.sensorHub,
           pbService: widget.pbService,
-        ),
-        childWhenEnabled: MiniPipCockpit(
-          obdService: widget.obdService,
-          sensorHub: widget.sensorHub,
         ),
       ),
     );

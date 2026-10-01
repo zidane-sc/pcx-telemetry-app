@@ -51,6 +51,20 @@ class SensorHub {
   double _filteredRoll = 0.0;
   double _currentG = 0.0;
 
+  bool _isLandscape = false;
+  bool _enableLean = true;
+
+  void setOrientation({required bool isLandscape}) {
+    _isLandscape = isLandscape;
+  }
+
+  void setLeanEnabled(bool enabled) {
+    _enableLean = enabled;
+    if (!enabled) {
+      _filteredRoll = 0.0;
+    }
+  }
+
   // Low-pass filter smoothing coefficient (0.08 = ultra smooth against engine vibration)
   static const double _lpfAlpha = 0.08;
   // Soft deadband threshold in degrees around 0
@@ -113,15 +127,39 @@ class SensorHub {
       debugPrint('[SensorHub] GPS Error: $e');
     }
 
-    // 2. Smooth Lean Angle from IMU Accelerometer with soft deadband
+    // 2. Smooth Lean Angle with Full Landscape & Portrait Orientation Awareness
     try {
       _accelSub = accelerometerEventStream().listen((event) {
-        final double magnitudeYZ =
-            sqrt(event.y * event.y + event.z * event.z);
-        final double rawRollRad = atan2(event.x, magnitudeYZ);
-        // Negate so that tilting left produces negative (LEFT) and tilting right produces positive (RIGHT)
-        double rawRollDeg = -rawRollRad * (180.0 / pi);
+        if (!_enableLean) {
+          _filteredRoll = 0.0;
+          return;
+        }
 
+        double rawRollRad = 0.0;
+
+        // Auto-detect or use UI orientation flag:
+        // In landscape: phone's long edge (Y axis) is across the handlebars.
+        // In portrait: phone's short edge (X axis) is across the handlebars.
+        final bool isHorizontal = _isLandscape || (event.x.abs() > event.y.abs());
+
+        if (!isHorizontal) {
+          // PORTRAIT: lateral tilt moves gravity across X axis
+          final double magnitudeYZ = sqrt(event.y * event.y + event.z * event.z);
+          // Leaning left -> event.x > 0 -> negate to get negative (LEFT)
+          rawRollRad = -atan2(event.x, magnitudeYZ);
+        } else {
+          // LANDSCAPE: lateral tilt moves gravity across Y axis
+          final double magnitudeXZ = sqrt(event.x * event.x + event.z * event.z);
+          if (event.x <= 0) {
+            // Landscape Left (standard: top of phone pointing left)
+            rawRollRad = atan2(event.y, magnitudeXZ);
+          } else {
+            // Landscape Right (top of phone pointing right)
+            rawRollRad = -atan2(event.y, magnitudeXZ);
+          }
+        }
+
+        double rawRollDeg = rawRollRad * (180.0 / pi);
         // Clamp to realistic motorcycle lean limits (-55° to +55°)
         rawRollDeg = rawRollDeg.clamp(-55.0, 55.0);
 

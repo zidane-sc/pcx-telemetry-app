@@ -4,6 +4,7 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/models/telemetry_data.dart';
+import '../../core/models/vehicle_profile.dart';
 import '../../core/bluetooth/obd_service.dart';
 import '../../core/sensors/sensor_hub.dart';
 import '../../core/trip/trip_manager.dart';
@@ -11,9 +12,12 @@ import '../../core/sync/pocketbase_service.dart';
 import '../../core/pip/pip_manager.dart';
 import '../../core/audio/voice_alert_service.dart';
 import '../../core/navigation/navigation_manager.dart';
+import '../../core/vehicle/vehicle_manager.dart';
+import '../../core/telemetry/performance_box.dart';
 import '../navigation/search_destination_sheet.dart';
 import '../navigation/navigation_turn_banner.dart';
 import '../navigation/cockpit_map_view.dart';
+import '../vehicle/vehicle_picker_sheet.dart';
 import '../widgets/lean_angle_gauge.dart';
 import '../widgets/shift_light_bar.dart';
 
@@ -64,6 +68,12 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
       _checkAutoStartTrigger(sensorData.gpsSpeedKmh);
 
+      // Update 0-60 km/h Drag Performance Box
+      final double currentSpeed = widget.obdService.state == ObdConnectionState.connected
+          ? _currentFrame.speedKmh
+          : sensorData.gpsSpeedKmh;
+      PerformanceBox().onSpeedUpdate(currentSpeed);
+
       if (NavigationManager().isNavigating) {
         NavigationManager().updateLocation(
           lat: sensorData.latitude,
@@ -84,6 +94,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
     TripManager().addListener(_onTripStateChanged);
     NavigationManager().addListener(_onNavStateChanged);
+    VehicleManager().addListener(_onVehicleChanged);
+    PerformanceBox().addListener(_onPerfChanged);
   }
 
   void _onTripStateChanged() {
@@ -94,11 +106,24 @@ class _CockpitScreenState extends State<CockpitScreen> {
     if (mounted) setState(() {});
   }
 
+  void _onVehicleChanged() {
+    if (mounted) {
+      widget.sensorHub.setLeanEnabled(VehicleManager().activeVehicle.hasLeanSensor);
+      setState(() {});
+    }
+  }
+
+  void _onPerfChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _countdownTimer?.cancel();
     TripManager().removeListener(_onTripStateChanged);
     NavigationManager().removeListener(_onNavStateChanged);
+    VehicleManager().removeListener(_onVehicleChanged);
+    PerformanceBox().removeListener(_onPerfChanged);
     super.dispose();
   }
 
@@ -245,7 +270,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
         const SnackBar(
           backgroundColor: Color(0xFF00FF66),
           content:
-              Text('Trip Recording Dimulai! Pantau GPS, Speed & Lean Angle.'),
+              Text('Trip Recording Dimulai! Pantau GPS, Speed & Telemetri.'),
         ),
       );
     } else {
@@ -334,7 +359,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Trip otomatis tersimpan ke Riwayat & di-sync ke Cloudflare PocketBase.',
+                      'Trip otomatis tersimpan & di-sync ke Cloudflare PocketBase.',
                       style: TextStyle(color: Colors.white70, fontSize: 10),
                     ),
                   ),
@@ -387,7 +412,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
           SnackBar(
             backgroundColor: Colors.redAccent,
             content: const Text(
-                'Izin Bluetooth ditolak permanen. Buka Pengaturan HP untuk mengizinkan.'),
+                'Izin Bluetooth ditolak. Buka Pengaturan HP untuk mengizinkan.'),
             action: SnackBarAction(
               label: 'PENGATURAN',
               textColor: Colors.white,
@@ -454,7 +479,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       padding: EdgeInsets.symmetric(vertical: 20),
                       child: Center(
                         child: Text(
-                          'Belum ada perangkat paired.\nPairing dulu dongle Kingbolen (OBDII) di Pengaturan Bluetooth HP (PIN: 1234).',
+                          'Belum ada perangkat paired.\nPairing dulu dongle Kingbolen (OBDII) di Bluetooth HP (PIN: 1234).',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white60, fontSize: 13),
                         ),
@@ -539,59 +564,81 @@ class _CockpitScreenState extends State<CockpitScreen> {
       SnackBar(content: Text('Menghubungkan ke ${device.name}...')),
     );
 
-    final success = await widget.obdService.connect(device.address);
+    final activeVeh = VehicleManager().activeVehicle;
+    final success = await widget.obdService.connect(device.address, protocol: activeVeh.protocol);
     if (!mounted) return;
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF00FF66),
-          content: Text('Berhasil terhubung ke ${device.name}! ECU Ready.'),
+          content: Text('Terhubung ke ${device.name}! Protocol: ${activeVeh.protocol.label}'),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.redAccent,
-          content: Text('Koneksi gagal. Pastikan kontak PCX posisi ON.'),
+          content: Text('Koneksi gagal. Pastikan kontak kendaraan posisi ON.'),
         ),
       );
     }
   }
 
-  String _getConnectionStatusText() {
-    if (widget.obdService.isMockMode) return 'SIMULATOR ACTIVE';
-    switch (widget.obdService.state) {
-      case ObdConnectionState.connected:
-        return _connectedDeviceName != null
-            ? 'LIVE: $_connectedDeviceName'
-            : 'OBD-2 CONNECTED';
-      case ObdConnectionState.connecting:
-        return 'CONNECTING...';
-      case ObdConnectionState.handshaking:
-        return 'INIT PROTOCOL (KWP)...';
-      case ObdConnectionState.error:
-        return 'CONNECTION ERROR';
-      case ObdConnectionState.disconnected:
-      default:
-        return 'STANDALONE GPS';
-    }
-  }
-
-  Color _getConnectionColor() {
-    if (widget.obdService.isMockMode) return const Color(0xFF00E5FF);
-    switch (widget.obdService.state) {
-      case ObdConnectionState.connected:
-        return const Color(0xFF00FF66);
-      case ObdConnectionState.connecting:
-      case ObdConnectionState.handshaking:
-        return const Color(0xFFFFB300);
-      case ObdConnectionState.error:
-        return Colors.redAccent;
-      case ObdConnectionState.disconnected:
-      default:
-        return const Color(0xFF00E5FF);
-    }
+  void _showQuickMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0F172A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.picture_in_picture_alt, color: Color(0xFF00E5FF)),
+                title: const Text('Mode Floating PiP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Buka mini cockpit melayang di atas Google Maps/Waze', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _enterPipMode();
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  widget.obdService.isMockMode ? Icons.stop_circle : Icons.play_circle_outline,
+                  color: widget.obdService.isMockMode ? Colors.redAccent : const Color(0xFF00FF66),
+                ),
+                title: Text(
+                  widget.obdService.isMockMode ? 'Hentikan Simulator' : 'Mode Simulator (Demo)',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text('Simulasi data gas, rpm, dan bensin tanpa dongle', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  widget.obdService.enableMockMode(!widget.obdService.isMockMode);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sync, color: Color(0xFF00FF66)),
+                title: const Text('Hubungkan Ulang Cloud PocketBase', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Cek status koneksi Cloudflare Tunnel server', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  widget.pbService.autoLogin();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Mencoba menyambungkan ke server...')),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -601,7 +648,11 @@ class _CockpitScreenState extends State<CockpitScreen> {
       body: SafeArea(
         child: OrientationBuilder(
           builder: (context, orientation) {
-            if (orientation == Orientation.landscape) {
+            final isLandscape = orientation == Orientation.landscape;
+            // Provide orientation to sensor hub so lean angle is mathematically correct
+            widget.sensorHub.setOrientation(isLandscape: isLandscape);
+
+            if (isLandscape) {
               return _buildLandscapeLayout();
             }
             return _buildPortraitLayout();
@@ -622,6 +673,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
     final String speedUnit = isObdLive ? 'KM / H' : 'KM / H (GPS)';
     final tripMgr = TripManager();
     final navMgr = NavigationManager();
+    final perfBox = PerformanceBox();
+    final activeVeh = VehicleManager().activeVehicle;
     final bool isRecording = tripMgr.isRecording;
     final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
     final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
@@ -630,7 +683,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
       child: Column(
         children: [
-          _buildTopStatusBar(isOverheat, isLowBatt),
+          _buildCleanTopBar(activeVeh, isOverheat, isLowBatt),
           const SizedBox(height: 6),
 
           // 16-Segment Shift Light Bar
@@ -638,7 +691,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
             rpm: isObdLive ? _currentFrame.rpm : (displaySpeed * 85.0).clamp(0.0, 9500.0),
             isLive: isObdLive,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           // Turn-by-Turn Navigation Instruction Banner
           NavigationTurnBanner(
@@ -661,7 +714,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
               ),
             ),
 
-          // Main Center Cockpit: Giant Digital Speedometer + Sub-readout
+          // Center Cockpit: Giant Digital Speedometer + Sub-readout
           Expanded(
             child: Center(
               child: Column(
@@ -695,9 +748,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
-                  // Sub-Telemetry Pill (RPM, TPS, G-Force)
+                  // Rich Telemetry Pill (RPM, TPS, LOAD%, TIMING)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                     decoration: BoxDecoration(
@@ -721,28 +774,39 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         ),
                         _buildSubDivider(),
                         _buildSubMetric(
-                          'G-FORCE',
-                          '${_currentSensor.gForce >= 0 ? '+' : ''}${_currentSensor.gForce.toStringAsFixed(2)}G',
+                          'LOAD',
+                          isObdLive ? '${_currentFrame.engineLoadPercent.toStringAsFixed(0)}%' : '--',
                           const Color(0xFFFFB300),
+                        ),
+                        _buildSubDivider(),
+                        _buildSubMetric(
+                          'TIMING',
+                          isObdLive ? '${_currentFrame.timingAdvanceDeg.toStringAsFixed(0)}°' : '--',
+                          const Color(0xFF7C4DFF),
                         ),
                       ],
                     ),
                   ),
+
+                  // 0-60 km/h Performance Drag Timer Pill
+                  const SizedBox(height: 6),
+                  _buildDragTimerPill(perfBox),
                 ],
               ),
             ),
           ),
 
-          // MotoGP Lean Angle Horizontal Gauge
-          LeanAngleGauge(
-            currentAngle: _currentSensor.rollAngleDeg,
-            maxLeft: tripMgr.maxLeanLeft,
-            maxRight: tripMgr.maxLeanRight,
-          ),
-          const SizedBox(height: 10),
+          // Show Lean Gauge ONLY for motorcycles; for cars show Lateral G-Force Horizon
+          if (activeVeh.hasLeanSensor)
+            LeanAngleGauge(
+              currentAngle: _currentSensor.rollAngleDeg,
+              maxLeft: tripMgr.maxLeanLeft,
+              maxRight: tripMgr.maxLeanRight,
+            ),
+          const SizedBox(height: 8),
 
           // Unified Automotive Telemetry Ribbon (Seamless 4-Column Bar)
-          _buildUnifiedTelemetryRibbon(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
+          _buildUnifiedTelemetryRibbon(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt, activeVeh),
           const SizedBox(height: 10),
 
           // Racing Action Button
@@ -763,6 +827,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
     final String speedUnit = isObdLive ? 'KM / H' : 'KM / H (GPS)';
     final tripMgr = TripManager();
     final navMgr = NavigationManager();
+    final perfBox = PerformanceBox();
+    final activeVeh = VehicleManager().activeVehicle;
     final bool isRecording = tripMgr.isRecording;
     final bool isOverheat = isObdLive && _currentFrame.ectC > 100.0;
     final bool isLowBatt = isObdLive && _currentFrame.batteryVoltage < 11.8;
@@ -771,7 +837,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
       child: Row(
         children: [
-          // Left Pane: Shift lights + Speedometer + Sub-readout + Button (44% width)
+          // Left Pane: Shift lights + Speedometer + Sub-readout + Drag Pill + Button (44% width)
           Expanded(
             flex: 44,
             child: Column(
@@ -806,9 +872,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
                             letterSpacing: 2.0,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                           decoration: BoxDecoration(
                             color: const Color(0xFF0F172A),
                             borderRadius: BorderRadius.circular(16),
@@ -828,9 +894,17 @@ class _CockpitScreenState extends State<CockpitScreen> {
                                 isObdLive ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%' : '--',
                                 const Color(0xFF00E5FF),
                               ),
+                              _buildSubDivider(),
+                              _buildSubMetric(
+                                'LOAD',
+                                isObdLive ? '${_currentFrame.engineLoadPercent.toStringAsFixed(0)}%' : '--',
+                                const Color(0xFFFFB300),
+                              ),
                             ],
                           ),
                         ),
+                        const SizedBox(height: 4),
+                        _buildDragTimerPill(perfBox),
                       ],
                     ),
                   ),
@@ -863,12 +937,12 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
           const SizedBox(width: 12),
 
-          // Right Pane: Top Status Bar + (Map or Lean Gauge + Telemetry Ribbon) (56% width)
+          // Right Pane: Clean Top Bar + (Map or Lean Gauge + Telemetry Ribbon) (56% width)
           Expanded(
             flex: 56,
             child: Column(
               children: [
-                _buildTopStatusBar(isOverheat, isLowBatt),
+                _buildCleanTopBar(activeVeh, isOverheat, isLowBatt),
                 const SizedBox(height: 6),
 
                 // Navigation Banner in Landscape
@@ -891,12 +965,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            LeanAngleGauge(
-                              currentAngle: _currentSensor.rollAngleDeg,
-                              maxLeft: tripMgr.maxLeanLeft,
-                              maxRight: tripMgr.maxLeanRight,
-                            ),
-                            _buildUnifiedTelemetryRibbon(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
+                            if (activeVeh.hasLeanSensor)
+                              LeanAngleGauge(
+                                currentAngle: _currentSensor.rollAngleDeg,
+                                maxLeft: tripMgr.maxLeanLeft,
+                                maxRight: tripMgr.maxLeanRight,
+                              ),
+                            _buildUnifiedTelemetryRibbon(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt, activeVeh),
                           ],
                         ),
                 ),
@@ -908,54 +983,43 @@ class _CockpitScreenState extends State<CockpitScreen> {
     );
   }
 
-  Widget _buildTopStatusBar(bool isOverheat, bool isLowBatt) {
-    final connColor = _getConnectionColor();
+  // ULTRA CLEAN TOP STATUS BAR (Un-cluttered, breathing room)
+  Widget _buildCleanTopBar(VehicleProfile activeVeh, bool isOverheat, bool isLowBatt) {
+    final bool isBike = activeVeh.type == VehicleType.motorcycle;
+    final bool isObdConnected = widget.obdService.state == ObdConnectionState.connected;
+
     return Row(
       children: [
-        // Left PCX 160 Badge + Connection
+        // Left: Sleek Vehicle Switcher Pill
         InkWell(
-          onTap: _showBluetoothPicker,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+          onTap: () => VehiclePickerSheet.show(context, widget.sensorHub),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0C1017),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00E5FF).withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
-                  ),
-                  child: const Text(
-                    'PCX 160',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
+                Icon(
+                  isBike ? Icons.two_wheeler : Icons.directions_car,
+                  size: 14,
+                  color: isBike ? const Color(0xFF00E5FF) : const Color(0xFF00FF66),
                 ),
                 const SizedBox(width: 6),
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: connColor,
-                    shape: BoxShape.circle,
+                Text(
+                  activeVeh.name.split(' ').take(2).join(' '),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  _getConnectionStatusText(),
-                  style: TextStyle(
-                    color: connColor,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
                 const Icon(Icons.arrow_drop_down, color: Colors.white38, size: 14),
               ],
             ),
@@ -964,30 +1028,57 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
         const Spacer(),
 
-        // Center Idiot Warning Lights (MIL, TEMP, BATT)
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildIdiotLight(Icons.warning_amber_rounded, false, Colors.orangeAccent),
-            const SizedBox(width: 8),
-            _buildIdiotLight(Icons.thermostat, isOverheat, Colors.redAccent),
-            const SizedBox(width: 8),
-            _buildIdiotLight(Icons.battery_alert, isLowBatt, Colors.redAccent),
-          ],
-        ),
+        // Center: Discreet Warning Lights (Only appears if something is wrong!)
+        if (isOverheat || isLowBatt)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isOverheat)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.thermostat, color: Colors.redAccent, size: 12),
+                      SizedBox(width: 4),
+                      Text('OVERHEAT', style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              if (isOverheat && isLowBatt) const SizedBox(width: 6),
+              if (isLowBatt)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.battery_alert, color: Colors.redAccent, size: 12),
+                      SizedBox(width: 4),
+                      Text('LOW BATT', style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
 
         const Spacer(),
 
-        // Right Action Controls
+        // Right: Generously spaced action controls (Search POI, Bluetooth, Menu)
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Destination Search Button
+            // Search POI Button
             IconButton(
-              icon: const Icon(Icons.search, color: Color(0xFF00FF66), size: 17),
+              icon: const Icon(Icons.search, color: Color(0xFF00FF66), size: 18),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              tooltip: 'Cari Tujuan Navigasi (OSRM)',
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Cari Tujuan Navigasi',
               onPressed: () {
                 SearchDestinationSheet.show(
                   context,
@@ -999,75 +1090,26 @@ class _CockpitScreenState extends State<CockpitScreen> {
               },
             ),
 
-            // Cloud Sync Indicator
-            ValueListenableBuilder<bool>(
-              valueListenable: widget.pbService.isConnectedNotifier,
-              builder: (context, isConnected, _) {
-                return InkWell(
-                  onTap: () => widget.pbService.autoLogin(),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isConnected
-                          ? const Color(0xFF00FF66).withOpacity(0.12)
-                          : Colors.white.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isConnected
-                            ? const Color(0xFF00FF66).withOpacity(0.4)
-                            : Colors.white12,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.cloud_done,
-                          size: 10,
-                          color: isConnected ? const Color(0xFF00FF66) : Colors.white24,
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          isConnected ? 'SYNC' : 'OFF',
-                          style: TextStyle(
-                            color: isConnected ? const Color(0xFF00FF66) : Colors.white38,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 2),
-
-            // Native PiP Button
+            // Bluetooth Connector Button
             IconButton(
-              icon: const Icon(Icons.picture_in_picture_alt, color: Color(0xFF00E5FF), size: 16),
+              icon: Icon(
+                Icons.bluetooth,
+                color: isObdConnected ? const Color(0xFF00FF66) : Colors.white38,
+                size: 18,
+              ),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              tooltip: 'Floating PiP HUD',
-              onPressed: _enterPipMode,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Pilih Dongle Bluetooth',
+              onPressed: _showBluetoothPicker,
             ),
-            const SizedBox(width: 2),
 
-            // Simulation Toggle Pill
-            TextButton(
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.06),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                minimumSize: const Size(34, 22),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () {
-                widget.obdService.enableMockMode(!widget.obdService.isMockMode);
-              },
-              child: Text(
-                widget.obdService.isMockMode ? 'Stop' : 'Sim',
-                style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 9, fontWeight: FontWeight.bold),
-              ),
+            // More Options Menu
+            IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.white54, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Menu Tambahan',
+              onPressed: _showQuickMenu,
             ),
           ],
         ),
@@ -1075,11 +1117,39 @@ class _CockpitScreenState extends State<CockpitScreen> {
     );
   }
 
-  Widget _buildIdiotLight(IconData icon, bool isActive, Color alertColor) {
-    return Icon(
-      icon,
-      size: 15,
-      color: isActive ? alertColor : Colors.white.withOpacity(0.12),
+  Widget _buildDragTimerPill(PerformanceBox perfBox) {
+    String dragText;
+    Color dragColor;
+
+    if (perfBox.state == DragState.measuring) {
+      dragText = '0-60 KM/H: ${perfBox.current0to60Sec.toStringAsFixed(2)}s';
+      dragColor = const Color(0xFFFFB300);
+    } else if (perfBox.state == DragState.finished) {
+      dragText = '0-60: ${perfBox.lastFinishedTimeSec.toStringAsFixed(2)}s (BEST: ${perfBox.best0to60Sec.toStringAsFixed(2)}s)';
+      dragColor = const Color(0xFF00FF66);
+    } else {
+      dragText = perfBox.best0to60Sec > 0
+          ? 'BEST 0-60: ${perfBox.best0to60Sec.toStringAsFixed(2)}s'
+          : '0-60 DRAG READY';
+      dragColor = Colors.white54;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        dragText,
+        style: TextStyle(
+          color: dragColor,
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+          fontFamily: 'monospace',
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 
@@ -1107,7 +1177,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
     );
   }
 
-  Widget _buildUnifiedTelemetryRibbon(bool isRecording, bool isObdLive, TripManager tripMgr, bool isOverheat, bool isLowBatt) {
+  Widget _buildUnifiedTelemetryRibbon(
+    bool isRecording,
+    bool isObdLive,
+    TripManager tripMgr,
+    bool isOverheat,
+    bool isLowBatt,
+    VehicleProfile activeVeh,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
@@ -1120,7 +1197,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
         children: [
           _buildRibbonColumn(
             label: isRecording ? 'JARAK' : 'RANGE',
-            value: isRecording ? '${tripMgr.distanceKm.toStringAsFixed(1)} KM' : (isObdLive ? '185 KM' : '--'),
+            value: isRecording ? '${tripMgr.distanceKm.toStringAsFixed(1)} KM' : (isObdLive ? '${(activeVeh.tankCapacityL * 22).round()} KM' : '--'),
             color: const Color(0xFF00FF66),
           ),
           _buildRibbonDivider(),

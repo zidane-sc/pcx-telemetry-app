@@ -38,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       GarageScreen(
         obdService: widget.obdService,
+        sensorHub: widget.sensorHub,
         pbService: widget.pbService,
       ),
       const TripsScreen(),

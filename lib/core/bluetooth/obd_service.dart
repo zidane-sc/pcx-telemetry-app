@@ -1,20 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import '../models/telemetry_data.dart';
+import '../models/vehicle_profile.dart';
 import '../telemetry/speed_density_calculator.dart';
 
-enum ObdConnectionState { disconnected, connecting, handshaking, connected, error }
+enum ObdConnectionState {
+  disconnected,
+  connecting,
+  handshaking,
+  connected,
+  error,
+}
 
 class ObdService {
-  final SpeedDensityCalculator _calculator = const SpeedDensityCalculator();
-
-  BluetoothConnection? _connection;
-  ObdConnectionState _state = ObdConnectionState.disconnected;
-  ObdConnectionState get state => _state;
-
   final StreamController<TelemetryFrame> _telemetryController =
       StreamController<TelemetryFrame>.broadcast();
   Stream<TelemetryFrame> get telemetryStream => _telemetryController.stream;
@@ -23,49 +23,63 @@ class ObdService {
       StreamController<ObdConnectionState>.broadcast();
   Stream<ObdConnectionState> get stateStream => _stateController.stream;
 
-  Timer? _pollingTimer;
+  ObdConnectionState _state = ObdConnectionState.disconnected;
+  ObdConnectionState get state => _state;
+
+  BluetoothConnection? _connection;
+  final SpeedDensityCalculator _calculator = const SpeedDensityCalculator();
+
   bool _isMockMode = false;
   bool get isMockMode => _isMockMode;
+  Timer? _mockTimer;
+  Timer? _pollingTimer;
 
-  // Running telemetry values
+  final StringBuffer _rxBuffer = StringBuffer();
+  Completer<String>? _pendingCommandCompleter;
+
+  // Real ECU Telemetry State
   double _currentRpm = 0.0;
   double _currentSpeed = 0.0;
   double _currentMap = 101.3;
+  double _currentTps = 0.0;
   double _currentEct = 30.0;
   double _currentIat = 30.0;
-  double _currentTps = 0.0;
   double _currentVolt = 12.5;
-
-  // Serial buffer reader state
-  final StringBuffer _rxBuffer = StringBuffer();
-  Completer<String>? _pendingCommandCompleter;
+  double _currentEngineLoad = 0.0;
+  double _currentTimingAdvance = 10.0;
+  double _currentFuelLevel = 0.0;
+  double _currentEcuOdo = 0.0;
 
   void enableMockMode(bool enable) {
     _isMockMode = enable;
     if (_isMockMode) {
       _startMockSimulation();
+      _state = ObdConnectionState.connected;
+      _stateController.add(_state);
     } else {
-      _pollingTimer?.cancel();
+      _mockTimer?.cancel();
       _state = ObdConnectionState.disconnected;
       _stateController.add(_state);
     }
   }
 
   void _startMockSimulation() {
-    _state = ObdConnectionState.connected;
-    _stateController.add(_state);
-    _pollingTimer?.cancel();
-
+    _mockTimer?.cancel();
     double mockTps = 0.0;
-    bool accelerating = true;
+    bool throttleOpening = true;
 
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (accelerating) {
-        mockTps += 2.0;
-        if (mockTps >= 75.0) accelerating = false;
+    _mockTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!_isMockMode) return;
+
+      if (throttleOpening) {
+        mockTps += 2.5;
+        if (mockTps >= 65.0) throttleOpening = false;
       } else {
-        mockTps -= 1.5;
-        if (mockTps <= 5.0) accelerating = true;
+        mockTps -= 1.8;
+        if (mockTps <= 0.0) {
+          mockTps = 0.0;
+          throttleOpening = true;
+        }
       }
 
       _currentTps = mockTps;
@@ -75,12 +89,15 @@ class ObdService {
       _currentEct = 88.0 + (_currentTps * 0.05);
       _currentIat = 34.0;
       _currentVolt = 14.2;
+      _currentEngineLoad = (mockTps * 1.2).clamp(12.0, 95.0);
+      _currentTimingAdvance = 12.0 + (_currentRpm / 400.0);
+      _currentFuelLevel = 75.0;
 
       _emitTelemetryFrame();
     });
   }
 
-  Future<bool> connect(String macAddress) async {
+  Future<bool> connect(String macAddress, {ObdProtocolType protocol = ObdProtocolType.kwp2000Fast}) async {
     if (_isMockMode) return true;
 
     try {
@@ -93,9 +110,7 @@ class ObdService {
       _rxBuffer.clear();
       _connection!.input?.listen(
         _onDataReceived,
-        onDone: () {
-          disconnect();
-        },
+        onDone: () => disconnect(),
         onError: (e) {
           debugPrint('[ObdService] Serial input error: $e');
           disconnect();
@@ -105,13 +120,14 @@ class ObdService {
       _state = ObdConnectionState.handshaking;
       _stateController.add(_state);
 
-      // ELM327 Initialization Pipeline
+      // ELM327 Adaptive Initialization Pipeline
       await _sendCommand('ATZ');
       await Future.delayed(const Duration(milliseconds: 600));
       await _sendCommand('ATE0'); // Echo Off
       await _sendCommand('ATL0'); // Linefeeds Off
       await _sendCommand('ATS0'); // Spaces Off
-      await _sendCommand('ATSP5'); // Force ISO 14230-4 KWP (Fast Init)
+      // Set protocol based on active vehicle (KWP2000 for PCX, CAN for Yaris/cars)
+      await _sendCommand('ATSP${protocol.atspValue}');
 
       _state = ObdConnectionState.connected;
       _stateController.add(_state);
@@ -132,7 +148,6 @@ class ObdService {
     for (int i = 0; i < str.length; i++) {
       final char = str[i];
       if (char == '>') {
-        // ELM327 command prompt reached, resolve pending command
         final response = _rxBuffer.toString().trim();
         _rxBuffer.clear();
         if (_pendingCommandCompleter != null &&
@@ -174,7 +189,7 @@ class ObdService {
       if (_state != ObdConnectionState.connected) return;
 
       try {
-        switch (cycle % 6) {
+        switch (cycle % 9) {
           case 0: // RPM
             final res = await _sendCommand('010C');
             _parseRpm(res);
@@ -191,13 +206,25 @@ class ObdService {
             final res = await _sendCommand('0111');
             _parseTps(res);
             break;
-          case 4: // ECT
+          case 4: // Engine Load
+            final res = await _sendCommand('0104');
+            _parseEngineLoad(res);
+            break;
+          case 5: // Timing Advance
+            final res = await _sendCommand('010E');
+            _parseTimingAdvance(res);
+            break;
+          case 6: // ECT (Coolant)
             final res = await _sendCommand('0105');
             _parseEct(res);
             break;
-          case 5: // Battery Voltage
+          case 7: // Battery Voltage
             final res = await _sendCommand('ATRV');
             _parseVolt(res);
+            break;
+          case 8: // Odometer (if supported) or Fuel Level
+            final resOdo = await _sendCommand('01A6');
+            _parseOdometer(resOdo);
             break;
         }
         cycle++;
@@ -209,7 +236,6 @@ class ObdService {
   }
 
   void _parseRpm(String raw) {
-    // Expected response format: "410CXXXX" where XXXX is hex bytes A and B
     final clean = raw.replaceAll(' ', '').toUpperCase();
     final idx = clean.indexOf('410C');
     if (idx != -1 && clean.length >= idx + 8) {
@@ -222,7 +248,6 @@ class ObdService {
   }
 
   void _parseSpeed(String raw) {
-    // Expected response format: "410DXX"
     final clean = raw.replaceAll(' ', '').toUpperCase();
     final idx = clean.indexOf('410D');
     if (idx != -1 && clean.length >= idx + 6) {
@@ -232,7 +257,6 @@ class ObdService {
   }
 
   void _parseMap(String raw) {
-    // Expected response format: "410BXX" (Pressure in kPa)
     final clean = raw.replaceAll(' ', '').toUpperCase();
     final idx = clean.indexOf('410B');
     if (idx != -1 && clean.length >= idx + 6) {
@@ -242,7 +266,6 @@ class ObdService {
   }
 
   void _parseTps(String raw) {
-    // Expected response format: "4111XX" (Throttle % = A * 100 / 255)
     final clean = raw.replaceAll(' ', '').toUpperCase();
     final idx = clean.indexOf('4111');
     if (idx != -1 && clean.length >= idx + 6) {
@@ -252,8 +275,27 @@ class ObdService {
     }
   }
 
+  void _parseEngineLoad(String raw) {
+    final clean = raw.replaceAll(' ', '').toUpperCase();
+    final idx = clean.indexOf('4104');
+    if (idx != -1 && clean.length >= idx + 6) {
+      final hex = clean.substring(idx + 4, idx + 6);
+      final val = int.tryParse(hex, radix: 16) ?? 0;
+      _currentEngineLoad = (val * 100.0) / 255.0;
+    }
+  }
+
+  void _parseTimingAdvance(String raw) {
+    final clean = raw.replaceAll(' ', '').toUpperCase();
+    final idx = clean.indexOf('410E');
+    if (idx != -1 && clean.length >= idx + 6) {
+      final hex = clean.substring(idx + 4, idx + 6);
+      final val = int.tryParse(hex, radix: 16) ?? 128;
+      _currentTimingAdvance = (val - 128) / 2.0;
+    }
+  }
+
   void _parseEct(String raw) {
-    // Expected response format: "4105XX" (Coolant Temp °C = A - 40)
     final clean = raw.replaceAll(' ', '').toUpperCase();
     final idx = clean.indexOf('4105');
     if (idx != -1 && clean.length >= idx + 6) {
@@ -264,11 +306,22 @@ class ObdService {
   }
 
   void _parseVolt(String raw) {
-    // Expected response format: "14.2V" or "12.5V"
     final clean = raw.replaceAll(' ', '').toUpperCase().replaceAll('V', '');
     final volt = double.tryParse(clean);
     if (volt != null && volt > 5.0 && volt < 20.0) {
       _currentVolt = volt;
+    }
+  }
+
+  void _parseOdometer(String raw) {
+    final clean = raw.replaceAll(' ', '').toUpperCase();
+    final idx = clean.indexOf('41A6');
+    if (idx != -1 && clean.length >= idx + 12) {
+      final hex = clean.substring(idx + 4, idx + 12);
+      final val = int.tryParse(hex, radix: 16);
+      if (val != null && val > 0) {
+        _currentEcuOdo = val / 10.0;
+      }
     }
   }
 
@@ -297,6 +350,10 @@ class ObdService {
       instantaneousKml: economy,
       leanAngleDeg: 0.0,
       gForce: 0.0,
+      engineLoadPercent: _currentEngineLoad,
+      timingAdvanceDeg: _currentTimingAdvance,
+      fuelLevelPercent: _currentFuelLevel,
+      ecuOdometerKm: _currentEcuOdo,
     );
 
     _telemetryController.add(frame);

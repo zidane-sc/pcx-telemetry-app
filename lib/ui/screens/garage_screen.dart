@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/bluetooth/obd_service.dart';
+import '../../core/sensors/sensor_hub.dart';
 import '../../core/sync/pocketbase_service.dart';
 import '../../core/trip/trip_manager.dart';
+import '../../core/vehicle/vehicle_manager.dart';
+import '../vehicle/vehicle_picker_sheet.dart';
 
 class GarageScreen extends StatefulWidget {
   final ObdService obdService;
+  final SensorHub sensorHub;
   final PocketBaseService pbService;
 
   const GarageScreen({
     super.key,
     required this.obdService,
+    required this.sensorHub,
     required this.pbService,
   });
 
@@ -314,6 +319,7 @@ class _GarageScreenState extends State<GarageScreen> {
         widget.obdService.state == ObdConnectionState.connected ||
             widget.obdService.isMockMode;
 
+    final activeVeh = VehicleManager().activeVehicle;
     final totalOdo = _currentOdometer;
 
     return Scaffold(
@@ -336,6 +342,13 @@ class _GarageScreenState extends State<GarageScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.swap_horiz, color: Color(0xFF00E5FF)),
+            tooltip: 'Ganti Kendaraan',
+            onPressed: () => VehiclePickerSheet.show(context, widget.sensorHub),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -357,9 +370,9 @@ class _GarageScreenState extends State<GarageScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'HONDA PCX 160 eSP+ ABS',
-                          style: TextStyle(
+                        Text(
+                          activeVeh.name.toUpperCase(),
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 14,
                             fontWeight: FontWeight.w900,
@@ -368,7 +381,7 @@ class _GarageScreenState extends State<GarageScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'B 1234 SC • 156.9cc 4-Valve',
+                          '${activeVeh.plateNumber.isNotEmpty ? '${activeVeh.plateNumber} • ' : ''}${activeVeh.engineCc.toStringAsFixed(0)}cc • Tangki ${activeVeh.tankCapacityL}L',
                           style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
                         ),
                       ],
