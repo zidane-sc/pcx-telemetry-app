@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/models/telemetry_data.dart';
@@ -15,7 +14,8 @@ import '../../core/navigation/navigation_manager.dart';
 import '../navigation/search_destination_sheet.dart';
 import '../navigation/navigation_turn_banner.dart';
 import '../navigation/cockpit_map_view.dart';
-import '../common/cyber_map_tiles.dart';
+import '../widgets/lean_angle_gauge.dart';
+import '../widgets/shift_light_bar.dart';
 
 class CockpitScreen extends StatefulWidget {
   final ObdService obdService;
@@ -52,11 +52,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
     super.initState();
 
     widget.obdService.telemetryStream.listen((frame) {
-      if (mounted) {
-        setState(() {
-          _currentFrame = frame;
-        });
-      }
+      if (mounted) setState(() => _currentFrame = frame);
     });
 
     widget.obdService.stateStream.listen((state) {
@@ -64,16 +60,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
     });
 
     widget.sensorHub.dataStream.listen((sensorData) {
-      if (mounted) {
-        setState(() {
-          _currentSensor = sensorData;
-        });
-      }
+      if (mounted) setState(() => _currentSensor = sensorData);
 
-      // Check auto-start trip trigger when vehicle starts moving
       _checkAutoStartTrigger(sensorData.gpsSpeedKmh);
 
-      // Feed GPS to NavigationManager if active
       if (NavigationManager().isNavigating) {
         NavigationManager().updateLocation(
           lat: sensorData.latitude,
@@ -82,7 +72,6 @@ class _CockpitScreenState extends State<CockpitScreen> {
         );
       }
 
-      // Feed data to TripManager if trip recording is active
       if (TripManager().isRecording) {
         TripManager().onTelemetryUpdate(
           sensorData: sensorData,
@@ -121,7 +110,6 @@ class _CockpitScreenState extends State<CockpitScreen> {
       return;
     }
 
-    // Trigger auto-start if moving > 14 km/h
     if (speedKmh > 14.0) {
       _triggerAutoStartCountdown(speedKmh);
     }
@@ -141,9 +129,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
             _countdownTimer =
                 Timer.periodic(const Duration(seconds: 1), (timer) {
               if (_countdownSeconds > 1) {
-                setDialogState(() {
-                  _countdownSeconds--;
-                });
+                setDialogState(() => _countdownSeconds--);
               } else {
                 timer.cancel();
                 if (Navigator.canPop(ctx)) Navigator.pop(ctx);
@@ -154,19 +140,19 @@ class _CockpitScreenState extends State<CockpitScreen> {
             });
 
             return AlertDialog(
-              backgroundColor: const Color(0xFF131B2E),
+              backgroundColor: const Color(0xFF0F172A),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
               title: Row(
                 children: const [
                   Icon(Icons.directions_bike,
-                      color: Color(0xFF00FF66), size: 28),
+                      color: Color(0xFF00FF66), size: 26),
                   SizedBox(width: 10),
                   Text(
                     'GERAKAN TERDETEKSI',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.1,
                     ),
@@ -186,11 +172,11 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     alignment: Alignment.center,
                     children: [
                       SizedBox(
-                        width: 64,
-                        height: 64,
+                        width: 60,
+                        height: 60,
                         child: CircularProgressIndicator(
                           value: _countdownSeconds / 5.0,
-                          strokeWidth: 5,
+                          strokeWidth: 4,
                           valueColor: const AlwaysStoppedAnimation<Color>(
                               Color(0xFF00FF66)),
                           backgroundColor: Colors.white10,
@@ -200,7 +186,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         '$_countdownSeconds',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 28,
+                          fontSize: 26,
                           fontWeight: FontWeight.w900,
                           fontFamily: 'monospace',
                         ),
@@ -214,7 +200,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   width: double.infinity,
                   child: TextButton(
                     style: TextButton.styleFrom(
-                      backgroundColor: Colors.redAccent.withOpacity(0.15),
+                      backgroundColor: Colors.redAccent.withOpacity(0.12),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -236,7 +222,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       style: TextStyle(
                           color: Colors.redAccent,
                           fontWeight: FontWeight.bold,
-                          fontSize: 12),
+                          fontSize: 11),
                     ),
                   ),
                 ),
@@ -299,7 +285,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF131B2E),
+        backgroundColor: const Color(0xFF0F172A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: const [
@@ -339,7 +325,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withOpacity(0.04),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -431,7 +417,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
       showModalBottomSheet(
         context: context,
-        backgroundColor: const Color(0xFF131B2E),
+        backgroundColor: const Color(0xFF0F172A),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -611,7 +597,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E17),
+      backgroundColor: const Color(0xFF080B11),
       body: SafeArea(
         child: OrientationBuilder(
           builder: (context, orientation) {
@@ -644,8 +630,15 @@ class _CockpitScreenState extends State<CockpitScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
       child: Column(
         children: [
-          _buildTopStatusBar(),
-          const SizedBox(height: 4),
+          _buildTopStatusBar(isOverheat, isLowBatt),
+          const SizedBox(height: 6),
+
+          // 16-Segment Shift Light Bar
+          ShiftLightBar(
+            rpm: isObdLive ? _currentFrame.rpm : (displaySpeed * 85.0).clamp(0.0, 9500.0),
+            isLive: isObdLive,
+          ),
+          const SizedBox(height: 8),
 
           // Turn-by-Turn Navigation Instruction Banner
           NavigationTurnBanner(
@@ -664,52 +657,96 @@ class _CockpitScreenState extends State<CockpitScreen> {
               child: CockpitMapView(
                 sensorData: _currentSensor,
                 navMgr: navMgr,
-                height: 190,
+                height: 180,
               ),
             ),
 
-          // Giant Speed Display
-          Center(
-            child: Column(
-              children: [
-                Text(
-                  displaySpeed.toStringAsFixed(0),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 84,
-                    fontWeight: FontWeight.w900,
-                    height: 1.0,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-                Text(
-                  speedUnit,
-                  style: const TextStyle(
-                    color: Color(0xFF00E5FF),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 10),
-          _buildTripButton(isRecording, tripMgr),
-          const SizedBox(height: 12),
-
-          // 2x2 Telemetry Grid
+          // Main Center Cockpit: Giant Digital Speedometer + Sub-readout
           Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1.45,
-              children: _buildMetricCards(
-                  isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        displaySpeed.toStringAsFixed(0),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 92,
+                          fontWeight: FontWeight.w900,
+                          height: 0.9,
+                          fontFamily: 'monospace',
+                          letterSpacing: -2.0,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        speedUnit,
+                        style: const TextStyle(
+                          color: Color(0xFF00E5FF),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Sub-Telemetry Pill (RPM, TPS, G-Force)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildSubMetric(
+                          'RPM',
+                          isObdLive ? _currentFrame.rpm.toStringAsFixed(0) : '--',
+                          const Color(0xFF00FF66),
+                        ),
+                        _buildSubDivider(),
+                        _buildSubMetric(
+                          'TPS',
+                          isObdLive ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%' : '--',
+                          const Color(0xFF00E5FF),
+                        ),
+                        _buildSubDivider(),
+                        _buildSubMetric(
+                          'G-FORCE',
+                          '${_currentSensor.gForce >= 0 ? '+' : ''}${_currentSensor.gForce.toStringAsFixed(2)}G',
+                          const Color(0xFFFFB300),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+
+          // MotoGP Lean Angle Horizontal Gauge
+          LeanAngleGauge(
+            currentAngle: _currentSensor.rollAngleDeg,
+            maxLeft: tripMgr.maxLeanLeft,
+            maxRight: tripMgr.maxLeanRight,
+          ),
+          const SizedBox(height: 10),
+
+          // Unified Automotive Telemetry Ribbon (Seamless 4-Column Bar)
+          _buildUnifiedTelemetryRibbon(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
+          const SizedBox(height: 10),
+
+          // Racing Action Button
+          _buildTripButton(isRecording, tripMgr),
         ],
       ),
     );
@@ -734,32 +771,70 @@ class _CockpitScreenState extends State<CockpitScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
       child: Row(
         children: [
-          // Left Pane: Big Speedometer + Start/Stop Button (42% width)
+          // Left Pane: Shift lights + Speedometer + Sub-readout + Button (44% width)
           Expanded(
-            flex: 42,
+            flex: 44,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  displaySpeed.toStringAsFixed(0),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 76,
-                    fontWeight: FontWeight.w900,
-                    height: 0.95,
-                    fontFamily: 'monospace',
+                ShiftLightBar(
+                  rpm: isObdLive ? _currentFrame.rpm : (displaySpeed * 85.0).clamp(0.0, 9500.0),
+                  isLive: isObdLive,
+                ),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          displaySpeed.toStringAsFixed(0),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 78,
+                            fontWeight: FontWeight.w900,
+                            height: 0.9,
+                            fontFamily: 'monospace',
+                            letterSpacing: -2.0,
+                          ),
+                        ),
+                        Text(
+                          speedUnit,
+                          style: const TextStyle(
+                            color: Color(0xFF00E5FF),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.0,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildSubMetric(
+                                'RPM',
+                                isObdLive ? _currentFrame.rpm.toStringAsFixed(0) : '--',
+                                const Color(0xFF00FF66),
+                              ),
+                              _buildSubDivider(),
+                              _buildSubMetric(
+                                'TPS',
+                                isObdLive ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%' : '--',
+                                const Color(0xFF00E5FF),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                Text(
-                  speedUnit,
-                  style: const TextStyle(
-                    color: Color(0xFF00E5FF),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.0,
-                  ),
-                ),
-                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   height: 38,
@@ -770,19 +845,15 @@ class _CockpitScreenState extends State<CockpitScreen> {
                           : const Color(0xFF00FF66).withOpacity(0.9),
                       foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     onPressed: _toggleTripRecording,
-                    icon: Icon(
-                        isRecording ? Icons.stop_circle : Icons.navigation,
-                        size: 16),
+                    icon: Icon(isRecording ? Icons.stop_circle : Icons.navigation, size: 16),
                     label: Text(
                       isRecording
                           ? 'FINISH (${tripMgr.distanceKm.toStringAsFixed(1)} KM)'
                           : 'START TRIP',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w900, fontSize: 11),
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
                     ),
                   ),
                 ),
@@ -792,13 +863,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
           const SizedBox(width: 12),
 
-          // Right Pane: Top Status Bar + (Map or 2x2 Compact Grid) (58% width)
+          // Right Pane: Top Status Bar + (Map or Lean Gauge + Telemetry Ribbon) (56% width)
           Expanded(
-            flex: 58,
+            flex: 56,
             child: Column(
               children: [
-                _buildTopStatusBar(),
-                const SizedBox(height: 4),
+                _buildTopStatusBar(isOverheat, isLowBatt),
+                const SizedBox(height: 6),
 
                 // Navigation Banner in Landscape
                 NavigationTurnBanner(
@@ -817,13 +888,16 @@ class _CockpitScreenState extends State<CockpitScreen> {
                           navMgr: navMgr,
                           height: double.infinity,
                         )
-                      : GridView.count(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                          childAspectRatio: 2.0,
-                          children: _buildMetricCards(isRecording, isObdLive,
-                              tripMgr, isOverheat, isLowBatt),
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            LeanAngleGauge(
+                              currentAngle: _currentSensor.rollAngleDeg,
+                              maxLeft: tripMgr.maxLeanLeft,
+                              maxRight: tripMgr.maxLeanRight,
+                            ),
+                            _buildUnifiedTelemetryRibbon(isRecording, isObdLive, tripMgr, isOverheat, isLowBatt),
+                          ],
                         ),
                 ),
               ],
@@ -834,52 +908,75 @@ class _CockpitScreenState extends State<CockpitScreen> {
     );
   }
 
-  Widget _buildTopStatusBar() {
+  Widget _buildTopStatusBar(bool isOverheat, bool isLowBatt) {
     final connColor = _getConnectionColor();
     return Row(
       children: [
-        // Left Connection Pill (wrapped in Expanded so it never overflows)
-        Expanded(
-          child: InkWell(
-            onTap: _showBluetoothPicker,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: connColor,
-                      shape: BoxShape.circle,
+        // Left PCX 160 Badge + Connection
+        InkWell(
+          onTap: _showBluetoothPicker,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00E5FF).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                  ),
+                  child: const Text(
+                    'PCX 160',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
                     ),
                   ),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      _getConnectionStatusText(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: connColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: connColor,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(width: 2),
-                  const Icon(Icons.arrow_drop_down,
-                      color: Colors.white54, size: 16),
-                ],
-              ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _getConnectionStatusText(),
+                  style: TextStyle(
+                    color: connColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Icon(Icons.arrow_drop_down, color: Colors.white38, size: 14),
+              ],
             ),
           ),
         ),
 
-        const SizedBox(width: 4),
+        const Spacer(),
+
+        // Center Idiot Warning Lights (MIL, TEMP, BATT)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildIdiotLight(Icons.warning_amber_rounded, false, Colors.orangeAccent),
+            const SizedBox(width: 8),
+            _buildIdiotLight(Icons.thermostat, isOverheat, Colors.redAccent),
+            const SizedBox(width: 8),
+            _buildIdiotLight(Icons.battery_alert, isLowBatt, Colors.redAccent),
+          ],
+        ),
+
+        const Spacer(),
 
         // Right Action Controls
         Row(
@@ -887,8 +984,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
           children: [
             // Destination Search Button
             IconButton(
-              icon: const Icon(Icons.search,
-                  color: Color(0xFF00FF66), size: 17),
+              icon: const Icon(Icons.search, color: Color(0xFF00FF66), size: 17),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               tooltip: 'Cari Tujuan Navigasi (OSRM)',
@@ -896,34 +992,26 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 SearchDestinationSheet.show(
                   context,
                   LatLng(
-                    _currentSensor.latitude != 0.0
-                        ? _currentSensor.latitude
-                        : -6.2088,
-                    _currentSensor.longitude != 0.0
-                        ? _currentSensor.longitude
-                        : 106.8456,
+                    _currentSensor.latitude != 0.0 ? _currentSensor.latitude : -6.2088,
+                    _currentSensor.longitude != 0.0 ? _currentSensor.longitude : 106.8456,
                   ),
                 );
               },
             ),
-            const SizedBox(width: 2),
 
             // Cloud Sync Indicator
             ValueListenableBuilder<bool>(
               valueListenable: widget.pbService.isConnectedNotifier,
               builder: (context, isConnected, _) {
                 return InkWell(
-                  onTap: () {
-                    widget.pbService.autoLogin();
-                  },
+                  onTap: () => widget.pbService.autoLogin(),
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
                       color: isConnected
                           ? const Color(0xFF00FF66).withOpacity(0.12)
-                          : Colors.white.withOpacity(0.05),
+                          : Colors.white.withOpacity(0.04),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
                         color: isConnected
@@ -936,17 +1024,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         Icon(
                           Icons.cloud_done,
                           size: 10,
-                          color: isConnected
-                              ? const Color(0xFF00FF66)
-                              : Colors.white38,
+                          color: isConnected ? const Color(0xFF00FF66) : Colors.white24,
                         ),
                         const SizedBox(width: 3),
                         Text(
                           isConnected ? 'SYNC' : 'OFF',
                           style: TextStyle(
-                            color: isConnected
-                                ? const Color(0xFF00FF66)
-                                : Colors.white38,
+                            color: isConnected ? const Color(0xFF00FF66) : Colors.white38,
                             fontSize: 8,
                             fontWeight: FontWeight.bold,
                           ),
@@ -957,37 +1041,22 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 );
               },
             ),
-            const SizedBox(width: 3),
+            const SizedBox(width: 2),
 
-            // Native PiP Button (Floating over Google Maps)
+            // Native PiP Button
             IconButton(
-              icon: const Icon(
-                Icons.picture_in_picture_alt,
-                color: Color(0xFF00E5FF),
-                size: 16,
-              ),
+              icon: const Icon(Icons.picture_in_picture_alt, color: Color(0xFF00E5FF), size: 16),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              tooltip: 'Floating PiP HUD (Di atas Google Maps)',
+              tooltip: 'Floating PiP HUD',
               onPressed: _enterPipMode,
             ),
             const SizedBox(width: 2),
 
-            // Bluetooth Scan Button
-            IconButton(
-              icon: const Icon(Icons.bluetooth_searching,
-                  color: Color(0xFF00E5FF), size: 16),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              tooltip: 'Scan OBD Bluetooth',
-              onPressed: _showBluetoothPicker,
-            ),
-            const SizedBox(width: 3),
-
             // Simulation Toggle Pill
             TextButton(
               style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.08),
+                backgroundColor: Colors.white.withOpacity(0.06),
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 minimumSize: const Size(34, 22),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -997,15 +1066,121 @@ class _CockpitScreenState extends State<CockpitScreen> {
               },
               child: Text(
                 widget.obdService.isMockMode ? 'Stop' : 'Sim',
-                style: const TextStyle(
-                    color: Color(0xFF00E5FF),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 9, fontWeight: FontWeight.bold),
               ),
             ),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildIdiotLight(IconData icon, bool isActive, Color alertColor) {
+    return Icon(
+      icon,
+      size: 15,
+      color: isActive ? alertColor : Colors.white.withOpacity(0.12),
+    );
+  }
+
+  Widget _buildSubMetric(String label, String value, Color color) {
+    return Row(
+      children: [
+        Text(
+          '$label ',
+          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9, fontWeight: FontWeight.bold),
+        ),
+        Text(
+          value,
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900, fontFamily: 'monospace'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubDivider() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      height: 10,
+      width: 1,
+      color: Colors.white12,
+    );
+  }
+
+  Widget _buildUnifiedTelemetryRibbon(bool isRecording, bool isObdLive, TripManager tripMgr, bool isOverheat, bool isLowBatt) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0C1017),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildRibbonColumn(
+            label: isRecording ? 'JARAK' : 'RANGE',
+            value: isRecording ? '${tripMgr.distanceKm.toStringAsFixed(1)} KM' : (isObdLive ? '185 KM' : '--'),
+            color: const Color(0xFF00FF66),
+          ),
+          _buildRibbonDivider(),
+          _buildRibbonColumn(
+            label: 'EFISIENSI',
+            value: isObdLive
+                ? (_currentFrame.speedKmh > 2 ? '${_currentFrame.instantaneousKml.toStringAsFixed(1)} km/L' : '${_currentFrame.fuelFlowLh.toStringAsFixed(2)} L/h')
+                : (isRecording ? '45.5 km/L' : '--'),
+            color: const Color(0xFFFFB300),
+          ),
+          _buildRibbonDivider(),
+          _buildRibbonColumn(
+            label: 'COOLANT',
+            value: isObdLive ? '${_currentFrame.ectC.toStringAsFixed(0)}°C' : '--',
+            color: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF),
+          ),
+          _buildRibbonDivider(),
+          _buildRibbonColumn(
+            label: 'BATTERY',
+            value: isObdLive ? '${_currentFrame.batteryVoltage.toStringAsFixed(1)}V' : (tripMgr.maxSpeedKmh > 0 ? '${tripMgr.maxSpeedKmh.toStringAsFixed(0)} km/h' : '--'),
+            color: isLowBatt ? Colors.redAccent : const Color(0xFF7C4DFF),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRibbonColumn({required String label, required String value, required Color color}) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.4),
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRibbonDivider() {
+    return Container(
+      height: 22,
+      width: 1,
+      color: Colors.white.withOpacity(0.06),
     );
   }
 
@@ -1019,8 +1194,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
               ? Colors.redAccent.withOpacity(0.9)
               : const Color(0xFF00FF66).withOpacity(0.9),
           foregroundColor: Colors.black,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         onPressed: _toggleTripRecording,
         icon: Icon(isRecording ? Icons.stop_circle : Icons.navigation),
@@ -1028,138 +1202,15 @@ class _CockpitScreenState extends State<CockpitScreen> {
           isRecording
               ? 'FINISH TRIP (${tripMgr.distanceKm.toStringAsFixed(1)} KM • ${_formatDuration(tripMgr.elapsed)})'
               : 'START TRIP (STANDALONE GPS)',
-          style: const TextStyle(
-              fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
+          style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.0, fontSize: 12),
         ),
       ),
     );
-  }
-
-  List<Widget> _buildMetricCards(bool isRecording, bool isObdLive,
-      TripManager tripMgr, bool isOverheat, bool isLowBatt) {
-    return [
-      // Card 1: Range or Trip Distance
-      _buildMetricCard(
-        title: isRecording ? 'JARAK TRIP INI' : 'SISA RANGE (DTE)',
-        value: isRecording
-            ? tripMgr.distanceKm.toStringAsFixed(1)
-            : (isObdLive ? '185' : '--'),
-        unit: isRecording ? 'KM' : (isObdLive ? 'KM' : 'BUTUH OBD'),
-        icon: isRecording ? Icons.route : Icons.local_gas_station,
-        accentColor: const Color(0xFF00FF66),
-      ),
-      // Card 2: MotoGP Lean Angle
-      _buildMetricCard(
-        title: 'LEAN ANGLE (MOTOGP)',
-        value: _currentSensor.rollAngleDeg.abs().toStringAsFixed(0),
-        unit: _currentSensor.rollAngleDeg < -1.5
-            ? '° LEFT'
-            : (_currentSensor.rollAngleDeg > 1.5 ? '° RIGHT' : '° CVR'),
-        icon: Icons.screen_rotation,
-        accentColor: const Color(0xFFFFB300),
-      ),
-      // Card 3: Radiator Temp or G-Force
-      _buildMetricCard(
-        title: isObdLive ? 'SUHU RADIATOR' : 'G-FORCE SENSOR',
-        value: isObdLive
-            ? _currentFrame.ectC.toStringAsFixed(0)
-            : '${_currentSensor.gForce >= 0 ? '+' : ''}${_currentSensor.gForce.toStringAsFixed(2)}',
-        unit: isObdLive ? '°C' : 'G',
-        icon: isObdLive ? Icons.thermostat : Icons.speed,
-        accentColor: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF),
-        isAlert: isOverheat,
-      ),
-      // Card 4: Battery Voltage or Top Speed
-      _buildMetricCard(
-        title: isObdLive ? 'TEGANGAN AKI' : 'TOP SPEED RECORD',
-        value: isObdLive
-            ? _currentFrame.batteryVoltage.toStringAsFixed(1)
-            : (tripMgr.maxSpeedKmh > 0
-                ? tripMgr.maxSpeedKmh.toStringAsFixed(0)
-                : '--'),
-        unit: isObdLive ? 'VOLT' : 'KM/H',
-        icon: isObdLive ? Icons.battery_charging_full : Icons.military_tech,
-        accentColor: isLowBatt ? Colors.redAccent : const Color(0xFF7C4DFF),
-        isAlert: isLowBatt,
-      ),
-    ];
   }
 
   String _formatDuration(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
-  }
-
-  Widget _buildMetricCard({
-    required String title,
-    required String value,
-    required String unit,
-    required IconData icon,
-    required Color accentColor,
-    bool isAlert = false,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: isAlert
-            ? Colors.redAccent.withOpacity(0.15)
-            : const Color(0xFF131B2E),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isAlert ? Colors.redAccent : accentColor.withOpacity(0.3),
-          width: 1.2,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-              Icon(icon, size: 14, color: accentColor),
-            ],
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  color: isAlert ? Colors.redAccent : Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  fontFamily: 'monospace',
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                unit,
-                style: TextStyle(
-                  color: accentColor,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 }

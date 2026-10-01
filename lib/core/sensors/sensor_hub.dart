@@ -119,7 +119,8 @@ class SensorHub {
         final double magnitudeYZ =
             sqrt(event.y * event.y + event.z * event.z);
         final double rawRollRad = atan2(event.x, magnitudeYZ);
-        double rawRollDeg = rawRollRad * (180.0 / pi);
+        // Negate so that tilting left produces negative (LEFT) and tilting right produces positive (RIGHT)
+        double rawRollDeg = -rawRollRad * (180.0 / pi);
 
         // Clamp to realistic motorcycle lean limits (-55° to +55°)
         rawRollDeg = rawRollDeg.clamp(-55.0, 55.0);
