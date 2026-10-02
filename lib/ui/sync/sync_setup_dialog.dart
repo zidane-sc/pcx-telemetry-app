@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/constants/api_constants.dart';
 import '../../core/sync/pocketbase_service.dart';
+import '../theme/theme_service.dart';
 
 /// One-time PocketBase credential setup.
 ///
@@ -33,6 +34,11 @@ class SyncSetupDialog extends StatefulWidget {
 }
 
 class _SyncSetupDialogState extends State<SyncSetupDialog> {
+
+  /// The active cockpit colour slot. The sheet follows the cockpit rather than
+  /// carrying its own palette: a rider who switches to Terik mode for a
+  /// daylight fuel stop should not have to switch back to read the receipt.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
   final _emailCtrl = TextEditingController(text: 'zidanesc02@gmail.com');
   final _passCtrl = TextEditingController();
 
@@ -72,11 +78,11 @@ class _SyncSetupDialogState extends State<SyncSetupDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF0F172A),
-      title: const Text(
+      backgroundColor: _slot.elevated,
+      title: Text(
         'KONEKSI CLOUD',
         style: TextStyle(
-          color: Colors.white,
+          color: _slot.text,
           fontSize: 14,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.2,
@@ -86,21 +92,21 @@ class _SyncSetupDialogState extends State<SyncSetupDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Trip, servis, dan diagnosa disimpan di server kamu sendiri. '
             'Masukkan akun PocketBase untuk mulai sync.',
-            style: TextStyle(color: Colors.white54, fontSize: 12),
+            style: TextStyle(color: _slot.dim(0.54), fontSize: 12),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.lock_outline, color: Colors.white30, size: 12),
+              Icon(Icons.lock_outline, color: _slot.dim(0.3), size: 12),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   'Disimpan di Android Keystore, tidak ada di source code.',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.35),
+                    color: _slot.dim(0.35),
                     fontSize: 10,
                   ),
                 ),
@@ -114,21 +120,21 @@ class _SyncSetupDialogState extends State<SyncSetupDialog> {
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!,
-                style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                style: TextStyle(color: _slot.danger, fontSize: 12)),
           ],
         ],
       ),
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.pop(context, false),
-          child: const Text('Nanti',
-              style: TextStyle(color: Colors.white54)),
+          child: Text('Nanti',
+              style: TextStyle(color: _slot.dim(0.54))),
         ),
         FilledButton(
           onPressed: _busy ? null : _submit,
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF00E5FF),
-            foregroundColor: Colors.black,
+            backgroundColor: _slot.accent,
+            foregroundColor: _slot.onAccent,
           ),
           child: _busy
               ? const SizedBox(
@@ -152,7 +158,7 @@ class _SyncSetupDialogState extends State<SyncSetupDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(color: Colors.white54, fontSize: 11)),
+            style: TextStyle(color: _slot.dim(0.54), fontSize: 11)),
         const SizedBox(height: 5),
         TextField(
           controller: ctrl,
@@ -163,17 +169,17 @@ class _SyncSetupDialogState extends State<SyncSetupDialog> {
           inputFormatters: obscure
               ? [FilteringTextInputFormatter.deny(RegExp(r'\s'))]
               : null,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: TextStyle(color: _slot.text, fontSize: 14),
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.white.withOpacity(0.04),
+            fillColor: _slot.dim(0.04),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(9),
-              borderSide: const BorderSide(color: Colors.white12),
+              borderSide: BorderSide(color: _slot.border(0.12)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(9),
-              borderSide: const BorderSide(color: Colors.white12),
+              borderSide: BorderSide(color: _slot.border(0.12)),
             ),
           ),
         ),

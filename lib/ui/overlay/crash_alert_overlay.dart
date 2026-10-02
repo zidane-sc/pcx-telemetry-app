@@ -161,7 +161,7 @@ class _CrashAlertOverlayState extends State<CrashAlertOverlay> {
                     label: Text('Kirim SMS ke $contact'),
                     onPressed: () async {
                       await RideReportService().openEmergencySms(
-                        'SayaZT, terjadi kecelakaan. '
+                        'Saya zeta, terjadi kecelakaan. '
                         'Lokasi terakhir: ${widget.detection.peakG.toStringAsFixed(1)} g. '
                         'Mohon cek.',
                       );

@@ -25,6 +25,10 @@ SUBS = [
     (r'Color\(0xFF00E5FF\)', '_slot.accent'),
     (r'Color\(0xFF00FF66\)', '_slot.positive'),
     (r'Color\(0xFFFFB300\)', '_slot.warning'),
+    # 8-digit forms the 6-digit patterns above never match: a translucent red
+    # wash for an armed rule, and a card tint that only exists in this file.
+    (r'Color\(0x1AFF5252\)', '_slot.danger.withOpacity(0.1)'),
+    (r'Color\(0xFF131C31\)', '_slot.surface'),
 ]
 
 # Material's pre-baked white opacities. 10/12/24 are hairlines and dividers,

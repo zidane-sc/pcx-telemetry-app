@@ -4,6 +4,7 @@ import '../../core/models/telemetry_data.dart';
 import '../../core/sensors/sensor_hub.dart';
 import '../../core/telemetry/lean_estimator.dart';
 import '../../core/trip/trip_manager.dart';
+import '../theme/theme_service.dart';
 
 class MiniPipCockpit extends StatefulWidget {
   final ObdService obdService;
@@ -20,6 +21,11 @@ class MiniPipCockpit extends StatefulWidget {
 }
 
 class _MiniPipCockpitState extends State<MiniPipCockpit> {
+
+  /// The active cockpit colour slot. The sheet follows the cockpit rather than
+  /// carrying its own palette: a rider who switches to Terik mode for a
+  /// daylight fuel stop should not have to switch back to read the receipt.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
   TelemetryFrame _currentFrame = TelemetryFrame.empty();
   SensorHubData _currentSensor = SensorHubData.empty();
 
@@ -67,7 +73,7 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF0A0E17),
                     border: Border.all(
-                      color: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF).withOpacity(0.5),
+                      color: isOverheat ? _slot.danger : _slot.accent.withOpacity(0.5),
                       width: 2.0,
                     ),
                   ),
@@ -81,8 +87,8 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                           children: [
                             Text(
                               displaySpeed.toStringAsFixed(0),
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: _slot.text,
                                 fontSize: 68,
                                 fontWeight: FontWeight.w900,
                                 height: 0.9,
@@ -92,8 +98,8 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                             const SizedBox(height: 4),
                             Text(
                               isObdLive ? 'KM / H' : 'KM / H (GPS)',
-                              style: const TextStyle(
-                                color: Color(0xFF00E5FF),
+                              style: TextStyle(
+                                color: _slot.accent,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 2.0,
@@ -107,7 +113,7 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                       Container(
                         width: 2,
                         height: 120,
-                        color: Colors.white12,
+                        color: _slot.border(0.12),
                         margin: const EdgeInsets.symmetric(horizontal: 12),
                       ),
 
@@ -123,14 +129,14 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                               value: tripMgr.isRecording
                                   ? '${tripMgr.distanceKm.toStringAsFixed(1)} KM'
                                   : '185 KM',
-                              color: const Color(0xFF00FF66),
+                              color: _slot.positive,
                             ),
                             _buildPipMetric(
                               label: 'BBM',
                               value: _currentFrame.speedKmh > 2
                                   ? '${_currentFrame.instantaneousKml.toStringAsFixed(1)} km/L'
                                   : '46.5 km/L',
-                              color: const Color(0xFFFFB300),
+                              color: _slot.warning,
                             ),
                             _buildPipMetric(
                               label: 'SUHU',
@@ -142,9 +148,9 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                                   : '--',
                               color: hasEct
                                   ? (isOverheat
-                                      ? Colors.redAccent
-                                      : const Color(0xFF00E5FF))
-                                  : Colors.white24,
+                                      ? _slot.danger
+                                      : _slot.accent)
+                                  : _slot.border(0.24),
                             ),
                             _buildPipMetric(
                               label: 'REBAH',
@@ -157,7 +163,7 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                                   '${_currentSensor.lean.confidence == LeanConfidence.degraded ? ' *' : ''}',
                               color: _currentSensor.lean.confidence ==
                                       LeanConfidence.degraded
-                                  ? Colors.redAccent
+                                  ? _slot.danger
                                   : const Color(0xFF7C4DFF),
                             ),
                           ],
@@ -185,7 +191,7 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: _slot.dim(0.5),
             fontSize: 12,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.0,

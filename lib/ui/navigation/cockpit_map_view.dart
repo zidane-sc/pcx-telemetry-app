@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../../core/navigation/navigation_manager.dart';
 import '../../core/sensors/sensor_hub.dart';
 import '../common/cyber_map_tiles.dart';
+import '../theme/theme_service.dart';
 
 class CockpitMapView extends StatefulWidget {
   final SensorHubData sensorData;
@@ -22,6 +23,11 @@ class CockpitMapView extends StatefulWidget {
 }
 
 class _CockpitMapViewState extends State<CockpitMapView> {
+
+  /// The active cockpit colour slot. The sheet follows the cockpit rather than
+  /// carrying its own palette: a rider who switches to Terik mode for a
+  /// daylight fuel stop should not have to switch back to read the receipt.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
   final MapController _mapController = MapController();
   bool _followMotorcycle = true;
   bool _courseUp = true; // Default to Course Up (Auto follows road/bike heading)
@@ -113,14 +119,14 @@ class _CockpitMapViewState extends State<CockpitMapView> {
         height: widget.height,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: const Color(0xFF0A0E17),
+          color: _slot.surface,
           border: Border.all(
-            color: const Color(0xFF00E5FF).withOpacity(0.4),
+            color: _slot.accent.withOpacity(0.4),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF00E5FF).withOpacity(0.12),
+              color: _slot.accent.withOpacity(0.12),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
@@ -154,13 +160,13 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                       Polyline(
                         points: route.polyline,
                         strokeWidth: 8.0,
-                        color: const Color(0xFF00E5FF).withOpacity(0.35),
+                        color: _slot.accent.withOpacity(0.35),
                       ),
                       // Core Sharp Cyan Line
                       Polyline(
                         points: route.polyline,
                         strokeWidth: 4.0,
-                        color: const Color(0xFF00E5FF),
+                        color: _slot.accent,
                       ),
                     ],
                   ),
@@ -181,19 +187,19 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                             height: 34,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: const Color(0xFF00FF66).withOpacity(0.25),
+                              color: _slot.positive.withOpacity(0.25),
                               border: Border.all(
                                 color:
-                                    const Color(0xFF00FF66).withOpacity(0.6),
+                                    _slot.positive.withOpacity(0.6),
                                 width: 1.5,
                               ),
                             ),
                           ),
                           Transform.rotate(
                             angle: markerRotationRad,
-                            child: const Icon(
+                            child: Icon(
                               Icons.navigation,
-                              color: Color(0xFF00FF66),
+                              color: _slot.positive,
                               size: 20,
                             ),
                           ),
@@ -207,12 +213,12 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                         point: dest.toLatLng,
                         width: 36,
                         height: 36,
-                        child: const Icon(
+                        child: Icon(
                           Icons.location_on,
-                          color: Colors.redAccent,
+                          color: _slot.danger,
                           size: 32,
                           shadows: [
-                            Shadow(color: Colors.black, blurRadius: 6),
+                            Shadow(color: _slot.onAccent, blurRadius: 6),
                           ],
                         ),
                       ),
@@ -231,8 +237,8 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                   _buildControlPill(
                     icon: Icons.my_location,
                     color: _followMotorcycle
-                        ? const Color(0xFF00FF66)
-                        : Colors.white70,
+                        ? _slot.positive
+                        : _slot.dim(0.7),
                     isActive: _followMotorcycle,
                     tooltip: 'Ikuti Posisi Motor',
                     onTap: _centerMotorcycle,
@@ -243,8 +249,8 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                   _buildControlPill(
                     icon: _courseUp ? Icons.navigation : Icons.explore,
                     color: _courseUp
-                        ? const Color(0xFF00FF66)
-                        : const Color(0xFF00E5FF),
+                        ? _slot.positive
+                        : _slot.accent,
                     isActive: _courseUp,
                     tooltip: _courseUp
                         ? 'Mode Course Up (Muter Mengikuti Arah Motor)'
@@ -257,7 +263,7 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                   if (route != null)
                     _buildControlPill(
                       icon: Icons.zoom_out_map,
-                      color: const Color(0xFF00E5FF),
+                      color: _slot.accent,
                       isActive: false,
                       tooltip: 'Lihat Seluruh Rute',
                       onTap: _fitRouteBounds,
@@ -267,7 +273,7 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                   // Zoom In Button
                   _buildControlPill(
                     icon: Icons.add,
-                    color: Colors.white70,
+                    color: _slot.dim(0.7),
                     isActive: false,
                     tooltip: 'Perbesar',
                     onTap: () {
@@ -282,7 +288,7 @@ class _CockpitMapViewState extends State<CockpitMapView> {
                   // Zoom Out Button
                   _buildControlPill(
                     icon: Icons.remove,
-                    color: Colors.white70,
+                    color: _slot.dim(0.7),
                     isActive: false,
                     tooltip: 'Perkecil',
                     onTap: () {
@@ -315,15 +321,15 @@ class _CockpitMapViewState extends State<CockpitMapView> {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: const Color(0xFF131B2E).withOpacity(0.9),
+          color: _slot.elevated.withOpacity(0.9),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isActive ? const Color(0xFF00FF66) : Colors.white12,
+            color: isActive ? _slot.positive : _slot.border(0.12),
             width: 1.2,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
+              color: _slot.onAccent.withOpacity(0.4),
               blurRadius: 4,
             ),
           ],

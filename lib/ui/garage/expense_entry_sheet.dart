@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/garage/expense_ledger.dart';
 import '../../core/trip/trip_manager.dart';
+import '../theme/theme_service.dart';
 
 /// Records a non-fuel running cost: a service, a tyre, insurance, a road tax.
 ///
@@ -22,7 +23,9 @@ class ExpenseEntrySheet extends StatefulWidget {
   }) {
     return showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F172A),
+      // Read from the caller's context, not from an instance: a static has no
+      // `this`.
+      backgroundColor: ThemeScope.slotOf(context).elevated,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -40,6 +43,11 @@ class ExpenseEntrySheet extends StatefulWidget {
 }
 
 class _ExpenseEntrySheetState extends State<ExpenseEntrySheet> {
+
+  /// The active cockpit colour slot. The sheet follows the cockpit rather than
+  /// carrying its own palette: a rider who switches to Terik mode for a
+  /// daylight fuel stop should not have to switch back to read the receipt.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
 
@@ -94,10 +102,10 @@ class _ExpenseEntrySheetState extends State<ExpenseEntrySheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'CATAT PENGELUARAN',
             style: TextStyle(
-              color: Colors.white,
+              color: _slot.text,
               fontSize: 14,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.4,
@@ -119,12 +127,12 @@ class _ExpenseEntrySheetState extends State<ExpenseEntrySheet> {
                       decoration: BoxDecoration(
                         color: _category == c
                             ? Color(c.colorValue).withOpacity(0.22)
-                            : Colors.white.withOpacity(0.04),
+                            : _slot.dim(0.04),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: _category == c
                               ? Color(c.colorValue)
-                              : Colors.white12,
+                              : _slot.border(0.12),
                         ),
                       ),
                       child: Text(
@@ -132,7 +140,7 @@ class _ExpenseEntrySheetState extends State<ExpenseEntrySheet> {
                         style: TextStyle(
                           color: _category == c
                               ? Color(c.colorValue)
-                              : Colors.white54,
+                              : _slot.dim(0.54),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -155,7 +163,7 @@ class _ExpenseEntrySheetState extends State<ExpenseEntrySheet> {
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(_error!,
-                style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                style: TextStyle(color: _slot.danger, fontSize: 12)),
           ],
 
           const SizedBox(height: 18),
@@ -164,8 +172,8 @@ class _ExpenseEntrySheetState extends State<ExpenseEntrySheet> {
             child: ElevatedButton(
               onPressed: _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00E5FF),
-                foregroundColor: Colors.black,
+                backgroundColor: _slot.accent,
+                foregroundColor: _slot.onAccent,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
@@ -191,24 +199,24 @@ class _ExpenseEntrySheetState extends State<ExpenseEntrySheet> {
       children: [
         Text(label,
             style:
-                const TextStyle(color: Colors.white54, fontSize: 11)),
+                TextStyle(color: _slot.dim(0.54), fontSize: 11)),
         const SizedBox(height: 5),
         TextField(
           controller: ctrl,
           keyboardType: keyboardType,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: TextStyle(color: _slot.text, fontSize: 14),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(color: Colors.white24),
+            hintStyle: TextStyle(color: _slot.border(0.24)),
             filled: true,
-            fillColor: Colors.white.withOpacity(0.04),
+            fillColor: _slot.dim(0.04),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(9),
-              borderSide: const BorderSide(color: Colors.white12),
+              borderSide: BorderSide(color: _slot.border(0.12)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(9),
-              borderSide: const BorderSide(color: Colors.white12),
+              borderSide: BorderSide(color: _slot.border(0.12)),
             ),
           ),
         ),

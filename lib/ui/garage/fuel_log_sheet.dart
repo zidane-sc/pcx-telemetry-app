@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/fuel/fuel_log_manager.dart';
 import '../../core/sync/pocketbase_service.dart';
+import '../theme/theme_service.dart';
 
 class FuelLogSheet extends StatefulWidget {
   final double currentOdometer;
@@ -19,7 +20,10 @@ class FuelLogSheet extends StatefulWidget {
   }) {
     return showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F172A),
+      // Read from the caller's context, not from an instance: a static has no
+      // `this`. The sheet body re-reads it for itself, so a theme change while
+      // it is open still repaints it.
+      backgroundColor: ThemeScope.slotOf(context).elevated,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -36,6 +40,11 @@ class FuelLogSheet extends StatefulWidget {
 }
 
 class _FuelLogSheetState extends State<FuelLogSheet> {
+
+  /// The active cockpit colour slot. The sheet follows the cockpit rather than
+  /// carrying its own palette: a rider who switches to Terik mode for a
+  /// daylight fuel stop should not have to switch back to read the receipt.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
   final _odoCtrl = TextEditingController();
   final _litersCtrl = TextEditingController(text: '5.0');
   final _priceCtrl = TextEditingController(text: '12950');
@@ -80,10 +89,10 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: const Color(0xFF00FF66),
+          backgroundColor: _slot.positive,
           content: Text(
             'Pengisian ${(liters).toStringAsFixed(1)}L $_fuelType berhasil dicatat!',
-            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            style: TextStyle(color: _slot.onAccent, fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -109,13 +118,13 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
-                  children: const [
-                    Icon(Icons.local_gas_station, color: Color(0xFF00FF66), size: 22),
+                  children: [
+                    Icon(Icons.local_gas_station, color: _slot.positive, size: 22),
                     SizedBox(width: 8),
                     Text(
                       'CATAT & KONSUMSI BBM',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: _slot.text,
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.2,
@@ -124,7 +133,7 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                  icon: Icon(Icons.close, color: _slot.dim(0.54), size: 20),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -135,26 +144,26 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF0C1017),
+                color: _slot.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
+                border: Border.all(color: _slot.dim(0.08)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStat('TOTAL PENGELUARAN', 'Rp ${fuelMgr.totalSpentIdr.toStringAsFixed(0)}', const Color(0xFF00FF66)),
-                  Container(width: 1, height: 28, color: Colors.white10),
-                  _buildStat('TOTAL BENSIN', '${fuelMgr.totalLiters.toStringAsFixed(1)} L', const Color(0xFF00E5FF)),
-                  Container(width: 1, height: 28, color: Colors.white10),
-                  _buildStat('FULL-TO-FULL', avgKml != null ? '${avgKml.toStringAsFixed(1)} km/L' : '--', const Color(0xFFFFB300)),
+                  _buildStat('TOTAL PENGELUARAN', 'Rp ${fuelMgr.totalSpentIdr.toStringAsFixed(0)}', _slot.positive),
+                  Container(width: 1, height: 28, color: _slot.border(0.1)),
+                  _buildStat('TOTAL BENSIN', '${fuelMgr.totalLiters.toStringAsFixed(1)} L', _slot.accent),
+                  Container(width: 1, height: 28, color: _slot.border(0.1)),
+                  _buildStat('FULL-TO-FULL', avgKml != null ? '${avgKml.toStringAsFixed(1)} km/L' : '--', _slot.warning),
                 ],
               ),
             ),
 
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'FORM ISI BENSIN',
-              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+              style: TextStyle(color: _slot.dim(0.7), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
             ),
             const SizedBox(height: 8),
 
@@ -165,7 +174,7 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                   child: TextField(
                     controller: _odoCtrl,
                     keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: TextStyle(color: _slot.text, fontSize: 13),
                     decoration: _inputDecoration('Odometer (KM)'),
                   ),
                 ),
@@ -174,7 +183,7 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                   child: TextField(
                     controller: _litersCtrl,
                     keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: TextStyle(color: _slot.text, fontSize: 13),
                     decoration: _inputDecoration('Jumlah Liter (L)'),
                   ),
                 ),
@@ -188,7 +197,7 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                   child: TextField(
                     controller: _priceCtrl,
                     keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: TextStyle(color: _slot.text, fontSize: 13),
                     decoration: _inputDecoration('Harga / Liter (Rp)'),
                   ),
                 ),
@@ -197,15 +206,15 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
+                      color: _slot.dim(0.04),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: _slot.border(0.12)),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _fuelType,
-                        dropdownColor: const Color(0xFF131B2E),
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        dropdownColor: _slot.elevated,
+                        style: TextStyle(color: _slot.text, fontSize: 12),
                         items: ['Pertalite 90', 'Pertamax 92', 'Pertamax Turbo 98', 'Shell V-Power', 'BP 92']
                             .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                             .toList(),
@@ -223,10 +232,10 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Isi Tangki Penuh (Full Tank)?', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Text('Isi Tangki Penuh (Full Tank)?', style: TextStyle(color: _slot.dim(0.7), fontSize: 12)),
                 Switch(
                   value: _isFullTank,
-                  activeColor: const Color(0xFF00FF66),
+                  activeColor: _slot.positive,
                   onChanged: (v) => setState(() => _isFullTank = v),
                 ),
               ],
@@ -238,8 +247,8 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
               height: 42,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00FF66),
-                  foregroundColor: Colors.black,
+                  backgroundColor: _slot.positive,
+                  foregroundColor: _slot.onAccent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _submitFillUp,
@@ -249,9 +258,9 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
             ),
 
             const SizedBox(height: 18),
-            const Text(
+            Text(
               'RIWAYAT PENGISIAN BBM',
-              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+              style: TextStyle(color: _slot.dim(0.7), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.0),
             ),
             const SizedBox(height: 8),
 
@@ -261,7 +270,7 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                 child: Center(
                   child: Text(
                     'Belum ada catatan isi bensin.',
-                    style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+                    style: TextStyle(color: _slot.dim(0.3), fontSize: 11),
                   ),
                 ),
               )
@@ -272,9 +281,9 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0C1017),
+                    color: _slot.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    border: Border.all(color: _slot.dim(0.06)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -284,11 +293,11 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                         children: [
                           Text(
                             '${e.liters.toStringAsFixed(1)}L • ${e.fuelType}',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            style: TextStyle(color: _slot.text, fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                           Text(
                             '$d • Odo: ${e.odometerKm.toStringAsFixed(0)} KM',
-                            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10),
+                            style: TextStyle(color: _slot.dim(0.4), fontSize: 10),
                           ),
                         ],
                       ),
@@ -297,12 +306,12 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
                         children: [
                           Text(
                             'Rp ${e.totalCostIdr.toStringAsFixed(0)}',
-                            style: const TextStyle(color: Color(0xFF00FF66), fontWeight: FontWeight.w900, fontSize: 13, fontFamily: 'monospace'),
+                            style: TextStyle(color: _slot.positive, fontWeight: FontWeight.w900, fontSize: 13, fontFamily: 'monospace'),
                           ),
                           if (e.calculatedKml != null)
                             Text(
                               '${e.calculatedKml!.toStringAsFixed(1)} km/L',
-                              style: const TextStyle(color: Color(0xFFFFB300), fontWeight: FontWeight.bold, fontSize: 10),
+                              style: TextStyle(color: _slot.warning, fontWeight: FontWeight.bold, fontSize: 10),
                             ),
                         ],
                       ),
@@ -319,7 +328,7 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
   Widget _buildStat(String label, String value, Color color) {
     return Column(
       children: [
-        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 8, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(color: _slot.dim(0.4), fontSize: 8, fontWeight: FontWeight.bold)),
         const SizedBox(height: 2),
         Text(value, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
       ],
@@ -329,9 +338,9 @@ class _FuelLogSheetState extends State<FuelLogSheet> {
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+      hintStyle: TextStyle(color: _slot.dim(0.3), fontSize: 11),
       filled: true,
-      fillColor: Colors.white.withOpacity(0.04),
+      fillColor: _slot.dim(0.04),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     );

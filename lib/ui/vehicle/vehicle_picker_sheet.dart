@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/vehicle_profile.dart';
 import '../../core/sensors/sensor_hub.dart';
 import '../../core/vehicle/vehicle_manager.dart';
+import '../theme/theme_service.dart';
 
 class VehiclePickerSheet extends StatefulWidget {
   final SensorHub sensorHub;
@@ -11,7 +12,9 @@ class VehiclePickerSheet extends StatefulWidget {
   static Future<void> show(BuildContext context, SensorHub sensorHub) {
     return showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F172A),
+      // Read from the caller's context, not from an instance: a static has no
+      // `this`.
+      backgroundColor: ThemeScope.slotOf(context).elevated,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -24,6 +27,11 @@ class VehiclePickerSheet extends StatefulWidget {
 }
 
 class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
+
+  /// The active cockpit colour slot. The sheet follows the cockpit rather than
+  /// carrying its own palette: a rider who switches to Terik mode for a
+  /// daylight fuel stop should not have to switch back to read the receipt.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
   void _openAddVehicleDialog() {
     final nameCtrl = TextEditingController();
     final plateCtrl = TextEditingController();
@@ -35,12 +43,12 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDlgState) => AlertDialog(
-          backgroundColor: const Color(0xFF131B2E),
+          backgroundColor: _slot.elevated,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: const Text(
+          title: Text(
             'TAMBAH KENDARAAN BARU',
             style: TextStyle(
-              color: Colors.white,
+              color: _slot.text,
               fontSize: 14,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.1,
@@ -61,21 +69,21 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
                             color: type == VehicleType.motorcycle
-                                ? const Color(0xFF00E5FF).withOpacity(0.2)
-                                : Colors.white.withOpacity(0.04),
+                                ? _slot.accent.withOpacity(0.2)
+                                : _slot.dim(0.04),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: type == VehicleType.motorcycle
-                                  ? const Color(0xFF00E5FF)
-                                  : Colors.white12,
+                                  ? _slot.accent
+                                  : _slot.border(0.12),
                             ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.two_wheeler, size: 16, color: Color(0xFF00E5FF)),
+                            children: [
+                              Icon(Icons.two_wheeler, size: 16, color: _slot.accent),
                               SizedBox(width: 6),
-                              Text('MOTOR', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text('MOTOR', style: TextStyle(color: _slot.text, fontSize: 11, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
@@ -89,21 +97,21 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
                             color: type == VehicleType.car
-                                ? const Color(0xFF00FF66).withOpacity(0.2)
-                                : Colors.white.withOpacity(0.04),
+                                ? _slot.positive.withOpacity(0.2)
+                                : _slot.dim(0.04),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: type == VehicleType.car
-                                  ? const Color(0xFF00FF66)
-                                  : Colors.white12,
+                                  ? _slot.positive
+                                  : _slot.border(0.12),
                             ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.directions_car, size: 16, color: Color(0xFF00FF66)),
+                            children: [
+                              Icon(Icons.directions_car, size: 16, color: _slot.positive),
                               SizedBox(width: 6),
-                              Text('MOBIL', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text('MOBIL', style: TextStyle(color: _slot.text, fontSize: 11, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
@@ -116,7 +124,7 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
                 // Name
                 TextField(
                   controller: nameCtrl,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: TextStyle(color: _slot.text, fontSize: 13),
                   decoration: _inputDecoration('Nama Kendaraan (Contoh: Vario 160 / Avanza)'),
                 ),
                 const SizedBox(height: 8),
@@ -124,7 +132,7 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
                 // Plate
                 TextField(
                   controller: plateCtrl,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: TextStyle(color: _slot.text, fontSize: 13),
                   decoration: _inputDecoration('Plat Nomor (Contoh: B 5678 XYZ)'),
                 ),
                 const SizedBox(height: 8),
@@ -136,7 +144,7 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
                       child: TextField(
                         controller: ccCtrl,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        style: TextStyle(color: _slot.text, fontSize: 13),
                         decoration: _inputDecoration('Kapasitas Mesin (cc)'),
                       ),
                     ),
@@ -145,7 +153,7 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
                       child: TextField(
                         controller: tankCtrl,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        style: TextStyle(color: _slot.text, fontSize: 13),
                         decoration: _inputDecoration('Tangki BBM (Liter)'),
                       ),
                     ),
@@ -157,10 +165,10 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('BATAL', style: TextStyle(color: Colors.white54)),
+              child: Text('BATAL', style: TextStyle(color: _slot.dim(0.54))),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
+              style: ElevatedButton.styleFrom(backgroundColor: _slot.accent),
               onPressed: () async {
                 final name = nameCtrl.text.trim();
                 if (name.isEmpty) return;
@@ -191,7 +199,7 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
                   setState(() {});
                 }
               },
-              child: const Text('SIMPAN', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              child: Text('SIMPAN', style: TextStyle(color: _slot.onAccent, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -202,9 +210,9 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11),
+      hintStyle: TextStyle(color: _slot.dim(0.3), fontSize: 11),
       filled: true,
-      fillColor: Colors.white.withOpacity(0.04),
+      fillColor: _slot.dim(0.04),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     );
@@ -226,17 +234,17 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'PILIH KENDARAAN (GARASI)',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: _slot.text,
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                  icon: Icon(Icons.close, color: _slot.dim(0.54), size: 20),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -256,42 +264,42 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
-                      color: isActive ? const Color(0xFF131B2E) : const Color(0xFF0C1017),
+                      color: isActive ? _slot.elevated : _slot.surface,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isActive ? const Color(0xFF00E5FF) : Colors.white.withOpacity(0.06),
+                        color: isActive ? _slot.accent : _slot.dim(0.06),
                         width: isActive ? 1.5 : 1.0,
                       ),
                     ),
                     child: ListTile(
                       leading: Icon(
                         isBike ? Icons.two_wheeler : Icons.directions_car,
-                        color: isActive ? const Color(0xFF00E5FF) : Colors.white54,
+                        color: isActive ? _slot.accent : _slot.dim(0.54),
                         size: 24,
                       ),
                       title: Text(
                         v.name,
                         style: TextStyle(
-                          color: Colors.white,
+                          color: _slot.text,
                           fontWeight: isActive ? FontWeight.w900 : FontWeight.normal,
                           fontSize: 13,
                         ),
                       ),
                       subtitle: Text(
                         '${v.plateNumber.isNotEmpty ? '${v.plateNumber} • ' : ''}${v.engineCc.toStringAsFixed(0)}cc • Tangki ${v.tankCapacityL}L${!v.hasLeanSensor ? ' • Lean Mati (Mobil)' : ''}',
-                        style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10),
+                        style: TextStyle(color: _slot.dim(0.4), fontSize: 10),
                       ),
                       trailing: isActive
                           ? Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF00FF66).withOpacity(0.15),
+                                color: _slot.positive.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
+                              child: Text(
                                 'AKTIF',
                                 style: TextStyle(
-                                  color: Color(0xFF00FF66),
+                                  color: _slot.positive,
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -317,14 +325,14 @@ class _VehiclePickerSheetState extends State<VehiclePickerSheet> {
               height: 40,
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: const Color(0xFF00E5FF).withOpacity(0.5)),
+                  side: BorderSide(color: _slot.accent.withOpacity(0.5)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _openAddVehicleDialog,
-                icon: const Icon(Icons.add, color: Color(0xFF00E5FF), size: 16),
-                label: const Text(
+                icon: Icon(Icons.add, color: _slot.accent, size: 16),
+                label: Text(
                   'TAMBAH KENDARAAN LAIN',
-                  style: TextStyle(color: Color(0xFF00E5FF), fontWeight: FontWeight.bold, fontSize: 11),
+                  style: TextStyle(color: _slot.accent, fontWeight: FontWeight.bold, fontSize: 11),
                 ),
               ),
             ),

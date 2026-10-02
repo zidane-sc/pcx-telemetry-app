@@ -392,7 +392,7 @@ class _SearchDestinationPageState extends State<SearchDestinationPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: ThemeScope.slotOf(ctx).elevated,
         title: const Text('Hapus riwayat tujuan?',
             style: TextStyle(color: Colors.white, fontSize: 15)),
         content: const Text(
