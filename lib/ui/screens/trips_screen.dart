@@ -9,6 +9,7 @@ import '../../core/trip/trip_manager.dart';
 import '../../core/trip/polyline_encoder.dart';
 import '../common/cyber_map_tiles.dart';
 import '../trip/trip_share_card_sheet.dart';
+import '../theme/theme_service.dart';
 
 class TripsScreen extends StatefulWidget {
   const TripsScreen({super.key});
@@ -18,6 +19,11 @@ class TripsScreen extends StatefulWidget {
 }
 
 class _TripsScreenState extends State<TripsScreen> {
+  /// The active cockpit colour slot. Every colour in this screen comes from
+  /// here rather than a literal, because a rider who switches to Terik mode
+  /// expects the whole app to follow -- the Journal included.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
+
   @override
   void initState() {
     super.initState();
@@ -38,7 +44,7 @@ class _TripsScreenState extends State<TripsScreen> {
   void _showTimelineDetails(TripRecord item) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: _slot.elevated,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -52,18 +58,18 @@ class _TripsScreenState extends State<TripsScreen> {
     final history = TripManager().history;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF080B11),
+      backgroundColor: _slot.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Row(
-          children: const [
-            Icon(Icons.route, color: Color(0xFF00E5FF), size: 22),
+          children: [
+            Icon(Icons.route, color: _slot.accent, size: 22),
             SizedBox(width: 8),
             Text(
               'JOURNAL & RIWAYAT TRIP',
               style: TextStyle(
-                color: Colors.white,
+                color: _slot.text,
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.5,
@@ -73,7 +79,7 @@ class _TripsScreenState extends State<TripsScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.sync, color: Color(0xFF00FF66), size: 20),
+            icon: Icon(Icons.sync, color: _slot.positive, size: 20),
             tooltip: 'Sync ke PocketBase',
             onPressed: () async {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -87,12 +93,12 @@ class _TripsScreenState extends State<TripsScreen> {
                 final anyUnsynced = TripManager().history.any((t) => !t.synced);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    backgroundColor: anyUnsynced ? Colors.orangeAccent : const Color(0xFF00FF66),
+                    backgroundColor: anyUnsynced ? _slot.warning : _slot.positive,
                     content: Text(
                       anyUnsynced
                           ? 'Sebagian trip belum ter-upload (koneksi offline). Tersimpan aman di HP.'
                           : 'Semua trip berhasil disinkronkan ke server!',
-                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: _slot.onAccent, fontWeight: FontWeight.bold),
                     ),
                   ),
                 );
@@ -106,16 +112,16 @@ class _TripsScreenState extends State<TripsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.route, size: 48, color: Colors.white.withOpacity(0.15)),
+                  Icon(Icons.route, size: 48, color: _slot.dim(0.15)),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Belum ada trip yang direkam.',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                    style: TextStyle(color: _slot.dim(0.7), fontSize: 14),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Buka tab KOKPIT & tap "START TRIP" sebelum jalan.',
-                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                    style: TextStyle(color: _slot.dim(0.38), fontSize: 11),
                   ),
                 ],
               ),
@@ -135,9 +141,9 @@ class _TripsScreenState extends State<TripsScreen> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0C1017),
+                      color: _slot.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.06)),
+                      border: Border.all(color: _slot.dim(0.06)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,8 +155,8 @@ class _TripsScreenState extends State<TripsScreen> {
                               children: [
                                 Text(
                                   'Trip #${history.length - index}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
+                                  style: TextStyle(
+                                    color: _slot.text,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                   ),
@@ -160,16 +166,16 @@ class _TripsScreenState extends State<TripsScreen> {
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: item.synced
-                                        ? const Color(0xFF00FF66).withOpacity(0.15)
-                                        : Colors.orangeAccent.withOpacity(0.15),
+                                        ? _slot.positive.withOpacity(0.15)
+                                        : _slot.warning.withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     item.synced ? 'CLOUD SYNCED' : 'PENDING SYNC',
                                     style: TextStyle(
                                       color: item.synced
-                                          ? const Color(0xFF00FF66)
-                                          : Colors.orangeAccent,
+                                          ? _slot.positive
+                                          : _slot.warning,
                                       fontSize: 8,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -181,8 +187,8 @@ class _TripsScreenState extends State<TripsScreen> {
                               children: [
                                 Text(
                                   'Rp ${item.tripCostIdr.toStringAsFixed(0)}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF00FF66),
+                                  style: TextStyle(
+                                    color: _slot.positive,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 13,
                                   ),
@@ -194,10 +200,10 @@ class _TripsScreenState extends State<TripsScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.06),
+                                      color: _slot.dim(0.06),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: const Icon(Icons.share, size: 14, color: Color(0xFF00E5FF)),
+                                    child: Icon(Icons.share, size: 14, color: _slot.accent),
                                   ),
                                 ),
                               ],
@@ -211,27 +217,27 @@ class _TripsScreenState extends State<TripsScreen> {
                             Text(
                               dateStr,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.4),
+                                color: _slot.dim(0.4),
                                 fontSize: 11,
                               ),
                             ),
                             Row(
-                              children: const [
+                              children: [
                                 Text(
                                   'Buka Playback Telemetri',
                                   style: TextStyle(
-                                    color: Color(0xFF00E5FF),
+                                    color: _slot.accent,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 SizedBox(width: 2),
-                                Icon(Icons.arrow_forward_ios, color: Color(0xFF00E5FF), size: 10),
+                                Icon(Icons.arrow_forward_ios, color: _slot.accent, size: 10),
                               ],
                             ),
                           ],
                         ),
-                        const Divider(color: Colors.white10, height: 18),
+                        Divider(color: _slot.border(0.1), height: 18),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -255,7 +261,7 @@ class _TripsScreenState extends State<TripsScreen> {
                                 label: 'ENGINE BRAKE',
                                 count: item.engineBrakingCount,
                                 seconds: item.engineBrakeSeconds,
-                                color: Colors.amber,
+                                color: _slot.warning,
                                 icon: Icons.trending_down,
                               ),
                               const SizedBox(width: 8),
@@ -336,13 +342,13 @@ class _TripsScreenState extends State<TripsScreen> {
       children: [
         Text(
           label,
-          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9),
+          style: TextStyle(color: _slot.dim(0.4), fontSize: 9),
         ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: _slot.text,
             fontWeight: FontWeight.bold,
             fontSize: 11,
             fontFamily: 'monospace',
@@ -363,6 +369,10 @@ class TripPlaybackSheet extends StatefulWidget {
 }
 
 class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
+  /// Same slot as the list behind it: a playback sheet that changed colour on
+  /// its own would read as a different app.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
+
   final MapController _mapController = MapController();
   List<Map<String, dynamic>> _points = [];
   List<LatLng> _mapPoints = [];
@@ -592,11 +602,11 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
 
       Color segColor;
       if (spd < 30) {
-        segColor = const Color(0xFF00FF66); // City Green (<30 km/h)
+        segColor = _slot.positive; // City Green (<30 km/h)
       } else if (spd < 60) {
-        segColor = const Color(0xFF00E5FF); // Cruising Cyan (30-60 km/h)
+        segColor = _slot.accent; // Cruising Cyan (30-60 km/h)
       } else if (spd < 80) {
-        segColor = const Color(0xFFFFB300); // Fast Amber (60-80 km/h)
+        segColor = _slot.warning; // Fast Amber (60-80 km/h)
       } else {
         segColor = const Color(0xFFFF3B30); // Top Speed Red (>80 km/h)
       }
@@ -654,10 +664,10 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'PETA RUTE & REKAMAN TELEMETRI',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: _slot.text,
                         fontSize: 13,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.2,
@@ -666,7 +676,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                     const SizedBox(height: 2),
                     Text(
                       '${_mapPoints.length} Titik Rute (${_formatSeconds(_movingSeconds)} bergerak) • Heading: ${currentBearing.toStringAsFixed(0)}°',
-                      style: const TextStyle(color: Color(0xFF00FF66), fontSize: 10),
+                      style: TextStyle(color: _slot.positive, fontSize: 10),
                     ),
                   ],
                 ),
@@ -676,7 +686,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                     // email — anywhere with a real share sheet. The IG story card
                     // below is for social; this is for archiving.
                     IconButton(
-                      icon: const Icon(Icons.picture_as_pdf, color: Color(0xFF00E5FF), size: 18),
+                      icon: Icon(Icons.picture_as_pdf, color: _slot.accent, size: 18),
                       tooltip: 'Bagikan Laporan PDF',
                       onPressed: () async {
                         final ok = await RideReportService().shareReport(widget.item);
@@ -687,19 +697,19 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                 ? 'Laporan PDF siap dibagikan'
                                 : 'Gagal membuat laporan PDF'),
                             backgroundColor:
-                                ok ? const Color(0xFF00FF66) : Colors.redAccent,
+                                ok ? _slot.positive : _slot.danger,
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
                       },
                     ),
                     IconButton(
-                      icon: const Icon(Icons.share, color: Color(0xFF00E5FF), size: 18),
+                      icon: Icon(Icons.share, color: _slot.accent, size: 18),
                       tooltip: 'Bagikan Story & Export GPX',
                       onPressed: () => TripShareCardSheet.show(context, widget.item),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                      icon: Icon(Icons.close, color: _slot.dim(0.54), size: 20),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -717,10 +727,10 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                 child: _mapPoints.isEmpty
                     ? Container(
                         color: Colors.black26,
-                        child: const Center(
+                        child: Center(
                           child: Text(
                             'Koordinat GPS belum terekam pada trip ini.',
-                            style: TextStyle(color: Colors.white38, fontSize: 12),
+                            style: TextStyle(color: _slot.dim(0.38), fontSize: 12),
                           ),
                         ),
                       )
@@ -752,9 +762,9 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                     point: _mapPoints.first,
                                     width: 22,
                                     height: 22,
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.play_circle_fill,
-                                      color: Color(0xFF00FF66),
+                                      color: _slot.positive,
                                       size: 20,
                                     ),
                                   ),
@@ -763,9 +773,9 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                     point: _mapPoints.last,
                                     width: 22,
                                     height: 22,
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.flag_circle,
-                                      color: Colors.redAccent,
+                                      color: _slot.danger,
                                       size: 20,
                                     ),
                                   ),
@@ -794,11 +804,11 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                           height: 32,
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: const Color(0xFFFFB300).withOpacity(0.3),
-                                            border: Border.all(color: const Color(0xFFFFB300), width: 2),
+                                            color: _slot.warning.withOpacity(0.3),
+                                            border: Border.all(color: _slot.warning, width: 2),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: const Color(0xFFFFB300).withOpacity(0.4),
+                                                color: _slot.warning.withOpacity(0.4),
                                                 blurRadius: 6,
                                               ),
                                             ],
@@ -806,9 +816,9 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                         ),
                                         Transform.rotate(
                                           angle: markerArrowRad,
-                                          child: const Icon(
+                                          child: Icon(
                                             Icons.navigation,
-                                            color: Colors.white,
+                                            color: _slot.text,
                                             size: 18,
                                           ),
                                         ),
@@ -837,16 +847,16 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                     width: 30,
                                     height: 30,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF131B2E).withOpacity(0.9),
+                                      color: _slot.elevated.withOpacity(0.9),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: _followBike ? const Color(0xFF00FF66) : Colors.white12,
+                                        color: _followBike ? _slot.positive : _slot.border(0.12),
                                       ),
                                     ),
                                     child: Icon(
                                       Icons.my_location,
                                       size: 15,
-                                      color: _followBike ? const Color(0xFF00FF66) : Colors.white60,
+                                      color: _followBike ? _slot.positive : _slot.dim(0.6),
                                     ),
                                   ),
                                 ),
@@ -869,16 +879,16 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                     width: 30,
                                     height: 30,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF131B2E).withOpacity(0.9),
+                                      color: _slot.elevated.withOpacity(0.9),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: _courseUp ? const Color(0xFF00FF66) : const Color(0xFF00E5FF),
+                                        color: _courseUp ? _slot.positive : _slot.accent,
                                       ),
                                     ),
                                     child: Icon(
                                       _courseUp ? Icons.navigation : Icons.explore,
                                       size: 15,
-                                      color: _courseUp ? const Color(0xFF00FF66) : const Color(0xFF00E5FF),
+                                      color: _courseUp ? _slot.positive : _slot.accent,
                                     ),
                                   ),
                                 ),
@@ -909,15 +919,16 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0C1017),
+                    color: _slot.surface,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    border: Border.all(color: _slot.dim(0.06)),
                   ),
                   child: CustomPaint(
                     painter: _SpeedSparklinePainter(
                       points: _points,
                       activeIndex: activeIdx,
                       maxSpeed: widget.item.maxSpeedKmh > 0 ? widget.item.maxSpeedKmh : 80.0,
+                      slot: _slot,
                     ),
                   ),
                 ),
@@ -930,16 +941,16 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0C1017),
+                  color: _slot.surface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  border: Border.all(color: _slot.dim(0.06)),
                 ),
                 child: Row(
                   children: [
                     IconButton(
                       icon: Icon(
                         _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
-                        color: const Color(0xFF00FF66),
+                        color: _slot.positive,
                         size: 28,
                       ),
                       padding: EdgeInsets.zero,
@@ -954,14 +965,14 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00E5FF).withOpacity(0.12),
+                          color: _slot.accent.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.3)),
+                          border: Border.all(color: _slot.accent.withOpacity(0.3)),
                         ),
                         child: Text(
                           '${_speedMultiplier}x',
-                          style: const TextStyle(
-                            color: Color(0xFF00E5FF),
+                          style: TextStyle(
+                            color: _slot.accent,
                             fontSize: 11,
                             fontWeight: FontWeight.w900,
                             fontFamily: 'monospace',
@@ -972,10 +983,10 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                     Expanded(
                       child: SliderTheme(
                         data: SliderTheme.of(context).copyWith(
-                          activeTrackColor: const Color(0xFF00E5FF),
-                          inactiveTrackColor: Colors.white12,
-                          thumbColor: const Color(0xFFFFB300),
-                          overlayColor: const Color(0xFFFFB300).withOpacity(0.2),
+                          activeTrackColor: _slot.accent,
+                          inactiveTrackColor: _slot.border(0.12),
+                          thumbColor: _slot.warning,
+                          overlayColor: _slot.warning.withOpacity(0.2),
                           trackHeight: 3,
                           thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                         ),
@@ -989,8 +1000,8 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                     ),
                     Text(
                       '${_formatSeconds(currentSec)} / ${_formatSeconds(totalSec)}',
-                      style: const TextStyle(
-                        color: Colors.white70,
+                      style: TextStyle(
+                        color: _slot.dim(0.7),
                         fontSize: 10,
                         fontFamily: 'monospace',
                         fontWeight: FontWeight.bold,
@@ -1006,19 +1017,19 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
             Row(
               children: [
                 Expanded(
-                  child: _buildInspectorCard('SPEED', '$currentSpd km/h', const Color(0xFF00E5FF)),
+                  child: _buildInspectorCard('SPEED', '$currentSpd km/h', _slot.accent),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: _buildInspectorCard(
                     'REBAH',
                     '${currentLean.abs()}° ${currentLean < 0 ? 'L' : (currentLean > 0 ? 'R' : '')}',
-                    const Color(0xFFFFB300),
+                    _slot.warning,
                   ),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: _buildInspectorCard('ELEVASI', '$currentAlt m', const Color(0xFF00FF66)),
+                  child: _buildInspectorCard('ELEVASI', '$currentAlt m', _slot.positive),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -1036,14 +1047,14 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF0C1017),
+        color: _slot.surface,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withOpacity(0.25), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 8, fontWeight: FontWeight.bold)),
+          Text(label, style: TextStyle(color: _slot.dim(0.4), fontSize: 8, fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
           Text(
             value,
@@ -1067,11 +1078,18 @@ class _SpeedSparklinePainter extends CustomPainter {
   final List<Map<String, dynamic>> points;
   final int activeIndex;
   final double maxSpeed;
+  /// A CustomPainter has no BuildContext, so the active slot is handed in
+  /// rather than read from the tree. This is the one place a theme change
+  /// would otherwise be silently missed: a sparkline drawn in noir's cyan on
+  /// a white Terik background is invisible, and nothing in the painter would
+  /// tell anyone.
+  final ThemeSlot slot;
 
   _SpeedSparklinePainter({
     required this.points,
     required this.activeIndex,
     required this.maxSpeed,
+    required this.slot,
   });
 
   @override
@@ -1106,15 +1124,15 @@ class _SpeedSparklinePainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          const Color(0xFF00E5FF).withOpacity(0.3),
-          const Color(0xFF00E5FF).withOpacity(0.0),
+          slot.accent.withOpacity(0.3),
+          slot.accent.withOpacity(0.0),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawPath(fillPath, fillPaint);
 
     // Stroke Line
     final strokePaint = Paint()
-      ..color = const Color(0xFF00E5FF)
+      ..color = slot.accent
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
     canvas.drawPath(path, strokePaint);
@@ -1126,11 +1144,11 @@ class _SpeedSparklinePainter extends CustomPainter {
       final activeY = size.height - (activeSpd / effectiveMax) * (size.height - 4);
 
       final cursorPaint = Paint()
-        ..color = const Color(0xFFFFB300)
+        ..color = slot.warning
         ..strokeWidth = 1.5;
       canvas.drawLine(Offset(activeX, 0), Offset(activeX, size.height), cursorPaint);
 
-      final dotPaint = Paint()..color = const Color(0xFFFFB300);
+      final dotPaint = Paint()..color = slot.warning;
       canvas.drawCircle(Offset(activeX, activeY), 3.0, dotPaint);
     }
   }

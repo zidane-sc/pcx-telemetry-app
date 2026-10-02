@@ -3,6 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pcx_telemetry_app/ui/theme/theme_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// WCAG 2.1 relative-contrast ratio: (L1 + 0.05) / (L2 + 0.05).
+///
+/// Relative luminance alone is not a contrast measure -- two colours can share
+/// a luminance and still differ sharply, and a small luminance gap can hide a
+/// large perceptual one. Every threshold in these tests is a WCAG number, so
+/// this is the formula they have to be checked against.
+double contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final hi = la > lb ? la : lb;
+  final lo = la > lb ? lb : la;
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -50,6 +64,85 @@ void main() {
     test('every slot has a distinct label', () {
       final labels = ThemeSlot.values.map((s) => s.label).toSet();
       expect(labels.length, ThemeSlot.values.length);
+    });
+
+    test('every accent colour is readable on its own surface', () {
+      // The Journal and Garage used to hardcode noir's cyan over a noir-black
+      // card. A rider switching to Terik got a light screen with invisible
+      // labels, because the token was never consulted.
+      for (final s in ThemeSlot.values) {
+        for (final entry in {
+          'accent': s.accent,
+          'positive': s.positive,
+          'warning': s.warning,
+          'danger': s.danger,
+        }.entries) {
+          expect(
+            contrastRatio(entry.value, s.surface),
+            greaterThanOrEqualTo(4.5),
+            reason: '${s.label}: ${entry.key} '
+                '${contrastRatio(entry.value, s.surface).toStringAsFixed(2)}:1 '
+                'on surface -- below 4.5:1 for body text',
+          );
+        }
+      }
+    });
+
+    test('onAccent is legible on top of every solid fill', () {
+      // Filled buttons (START TRIP, CATAT BENSIN) draw their label in onAccent.
+      // Picking it wrong makes a primary action unreadable, and it is the one
+      // combination that is not obvious by eye.
+      for (final s in ThemeSlot.values) {
+        for (final entry in {
+          'accent': s.accent,
+          'positive': s.positive,
+          'warning': s.warning,
+          'danger': s.danger,
+        }.entries) {
+          expect(
+            contrastRatio(entry.value, s.onAccent),
+            greaterThanOrEqualTo(4.5),
+            reason: '${s.label}: ${entry.key} fill with onAccent label is '
+                '${contrastRatio(entry.value, s.onAccent).toStringAsFixed(2)}:1',
+          );
+        }
+      }
+    });
+
+    test('body text meets the 4.5:1 threshold on background and surface', () {
+      for (final s in ThemeSlot.values) {
+        expect(contrastRatio(s.text, s.background), greaterThanOrEqualTo(4.5),
+            reason: '${s.label}: text on background');
+        expect(contrastRatio(s.text, s.surface), greaterThanOrEqualTo(4.5),
+            reason: '${s.label}: text on surface');
+      }
+    });
+
+    test('the light slot is the reason the dark one keeps a separate danger',
+        () {
+      // Colors.redAccent is a pale pink that vanishes on white. This is the
+      // concrete failure that made a light mode need its own tokens, so this
+      // asserts the shared colour FAILS rather than that a replacement works.
+      expect(contrastRatio(const Color(0xFFFF5252), ThemeSlot.sunGlare.surface),
+          lessThan(3.0),
+          reason: 'if the dark-mode red ever passed on a light surface, the '
+              'separate sunGlare danger token would be dead weight');
+      expect(contrastRatio(ThemeSlot.sunGlare.danger, ThemeSlot.sunGlare.surface),
+          greaterThanOrEqualTo(4.5),
+          reason: 'the replacement has to actually work');
+    });
+
+    test('dim and border derive from the slot text, not from white', () {
+      // A hardcoded Colors.white.withOpacity(x) is invisible on a light
+      // background; the whole point of the helper is that it cannot be.
+      for (final s in ThemeSlot.values) {
+        expect(s.dim(0.5), s.text.withOpacity(0.5));
+        expect(s.border(), s.text.withOpacity(0.12));
+        expect(
+          s.dim(0.5).computeLuminance(),
+          closeTo(s.text.withOpacity(0.5).computeLuminance(), 0.001),
+        );
+      }
     });
   });
 

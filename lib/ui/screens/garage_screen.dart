@@ -13,6 +13,7 @@ import '../vehicle/vehicle_picker_sheet.dart';
 import '../garage/expense_entry_sheet.dart';
 import '../garage/fuel_log_sheet.dart';
 import '../garage/rule_editor_sheet.dart';
+import '../theme/theme_service.dart';
 
 class GarageScreen extends StatefulWidget {
   final ObdService obdService;
@@ -31,6 +32,11 @@ class GarageScreen extends StatefulWidget {
 }
 
 class _GarageScreenState extends State<GarageScreen> {
+  /// The active cockpit colour slot. Every colour in this screen comes from
+  /// here rather than a literal: a rider who switches to Terik mode expects
+  /// the whole app to follow, and hardcoded cyan-on-black is invisible in it.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
+
   double _baseOdometerKm = 0.0;
   final Map<String, double> _lastServiceKmMap = {};
   bool _isLoading = true;
@@ -41,24 +47,28 @@ class _GarageScreenState extends State<GarageScreen> {
   bool? _dtcClean;
   bool _isTesting = false;
 
-  final List<Map<String, dynamic>> _maintenanceParts = [
+  /// Maintenance thresholds are data, not widgets -- but the badge colour each
+  /// one wears is a theme decision. `late` because a field initializer runs
+  /// before there is a BuildContext to read the active slot from, and these
+  /// are only ever read during build.
+  late final List<Map<String, dynamic>> _maintenanceParts = [
     {
       'key': 'engine_oil',
       'name': 'Oli Mesin (SPX 2 / Fully Synthetic)',
       'limitKm': 2500,
-      'color': const Color(0xFF00FF66),
+      'color': _slot.positive,
     },
     {
       'key': 'cvt_roller',
       'name': 'Roller & Slider CVT',
       'limitKm': 10000,
-      'color': const Color(0xFF00E5FF),
+      'color': _slot.accent,
     },
     {
       'key': 'cvt_vbelt',
       'name': 'V-Belt Penggerak CVT',
       'limitKm': 15000,
-      'color': const Color(0xFFFFB300),
+      'color': _slot.warning,
     },
     {
       'key': 'gear_oil',
@@ -125,12 +135,12 @@ class _GarageScreenState extends State<GarageScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: _slot.elevated,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text(
+        title: Text(
           'ODOMETER MOTOR',
           style: TextStyle(
-            color: Colors.white,
+            color: _slot.text,
             fontSize: 14,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.1,
@@ -140,22 +150,22 @@ class _GarageScreenState extends State<GarageScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Masukkan angka kilometer fisik PCX 160 saat ini agar hitungan servis akurat:',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: _slot.dim(0.7), fontSize: 12),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(color: _slot.text, fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: 'Contoh: 12500',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                hintStyle: TextStyle(color: _slot.dim(0.3)),
                 suffixText: 'KM',
-                suffixStyle: const TextStyle(color: Color(0xFF00E5FF), fontWeight: FontWeight.bold),
+                suffixStyle: TextStyle(color: _slot.accent, fontWeight: FontWeight.bold),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.06),
+                fillColor: _slot.dim(0.06),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
@@ -164,10 +174,10 @@ class _GarageScreenState extends State<GarageScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('BATAL', style: TextStyle(color: Colors.white54)),
+            child: Text('BATAL', style: TextStyle(color: _slot.dim(0.54))),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00E5FF)),
+            style: ElevatedButton.styleFrom(backgroundColor: _slot.accent),
             onPressed: () async {
               final val = double.tryParse(ctrl.text.trim()) ?? 0.0;
               final prefs = await SharedPreferences.getInstance();
@@ -175,7 +185,7 @@ class _GarageScreenState extends State<GarageScreen> {
               setState(() => _baseOdometerKm = val);
               if (mounted) Navigator.pop(ctx);
             },
-            child: const Text('SIMPAN', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: Text('SIMPAN', style: TextStyle(color: _slot.onAccent, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -192,16 +202,16 @@ class _GarageScreenState extends State<GarageScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: _slot.elevated,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Row(
           children: [
             Icon(Icons.check_circle_outline, color: color, size: 22),
             const SizedBox(width: 8),
-            const Text(
+            Text(
               'CATAT SERVIS / GANTI PART',
               style: TextStyle(
-                color: Colors.white,
+                color: _slot.text,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.1,
@@ -215,24 +225,24 @@ class _GarageScreenState extends State<GarageScreen> {
           children: [
             Text(
               name,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              style: TextStyle(color: _slot.text, fontWeight: FontWeight.bold, fontSize: 13),
             ),
             const SizedBox(height: 8),
             Text(
               'Penggantian part pada odometer ${currentOdo.toStringAsFixed(0)} KM?\n\nHitungan mundur di-reset ke $limitKm KM & disinkronkan ke PocketBase.',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: _slot.dim(0.7), fontSize: 12),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('BATAL', style: TextStyle(color: Colors.white54)),
+            child: Text('BATAL', style: TextStyle(color: _slot.dim(0.54))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: color,
-              foregroundColor: Colors.black,
+              foregroundColor: _slot.onAccent,
             ),
             onPressed: () async {
               final prefs = await SharedPreferences.getInstance();
@@ -253,10 +263,10 @@ class _GarageScreenState extends State<GarageScreen> {
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    backgroundColor: const Color(0xFF00FF66),
+                    backgroundColor: _slot.positive,
                     content: Text(
                       'Servis $name tercatat di ${currentOdo.toStringAsFixed(0)} KM!',
-                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: _slot.onAccent, fontWeight: FontWeight.bold),
                     ),
                   ),
                 );
@@ -276,8 +286,8 @@ class _GarageScreenState extends State<GarageScreen> {
 
     if (!isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.orangeAccent,
+        SnackBar(
+          backgroundColor: _slot.warning,
           content: Text('Hubungkan dongle OBD-2 Bluetooth untuk membaca sensor ECU.'),
         ),
       );
@@ -305,8 +315,8 @@ class _GarageScreenState extends State<GarageScreen> {
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF00FF66),
+        SnackBar(
+          backgroundColor: _slot.positive,
           content: Text('Diagnosa selesai! Sistem ECU & kelistrikan aman.'),
         ),
       );
@@ -328,15 +338,15 @@ class _GarageScreenState extends State<GarageScreen> {
         builder: (context, snapshot) {
           final p = snapshot.data!;
           return AlertDialog(
-            backgroundColor: const Color(0xFF131B2E),
+            backgroundColor: _slot.elevated,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             title: Row(
-              children: const [
-                Icon(Icons.cloud_download, color: Color(0xFF00E5FF), size: 22),
+              children: [
+                Icon(Icons.cloud_download, color: _slot.accent, size: 22),
                 SizedBox(width: 8),
                 Text(
                   'DOWNLOAD PETA OFFLINE',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+                  style: TextStyle(color: _slot.text, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1),
                 ),
               ],
             ),
@@ -344,17 +354,17 @@ class _GarageScreenState extends State<GarageScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Mengunduh area Jabodetabek (Jakarta, Bogor, Depok, Tangerang, Bekasi):',
-                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                  style: TextStyle(color: _slot.dim(0.7), fontSize: 11),
                 ),
                 const SizedBox(height: 12),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
                   child: LinearProgressIndicator(
                     value: p.percent,
-                    backgroundColor: Colors.white10,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00FF66)),
+                    backgroundColor: _slot.border(0.1),
+                    valueColor: AlwaysStoppedAnimation<Color>(_slot.positive),
                     minHeight: 6,
                   ),
                 ),
@@ -364,27 +374,27 @@ class _GarageScreenState extends State<GarageScreen> {
                   children: [
                     Text(
                       '${(p.percent * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(color: Color(0xFF00FF66), fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                      style: TextStyle(color: _slot.positive, fontSize: 13, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
                     ),
                     Text(
                       '${p.downloaded} / ${p.total} Tile',
-                      style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11, fontFamily: 'monospace'),
+                      style: TextStyle(color: _slot.dim(0.4), fontSize: 11, fontFamily: 'monospace'),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   p.statusText,
-                  style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                  style: TextStyle(color: _slot.dim(0.5), fontSize: 10),
                 ),
               ],
             ),
             actions: [
               if (p.isCompleted)
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FF66)),
+                  style: ElevatedButton.styleFrom(backgroundColor: _slot.positive),
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('SELESAI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  child: Text('SELESAI', style: TextStyle(color: _slot.onAccent, fontWeight: FontWeight.bold)),
                 )
               else
                 TextButton(
@@ -392,7 +402,7 @@ class _GarageScreenState extends State<GarageScreen> {
                     downloader.cancelDownload();
                     Navigator.pop(ctx);
                   },
-                  child: const Text('BATALKAN', style: TextStyle(color: Colors.redAccent)),
+                  child: Text('BATALKAN', style: TextStyle(color: _slot.danger)),
                 ),
             ],
           );
@@ -404,9 +414,9 @@ class _GarageScreenState extends State<GarageScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF080B11),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF00E5FF))),
+      return Scaffold(
+        backgroundColor: _slot.background,
+        body: Center(child: CircularProgressIndicator(color: _slot.accent)),
       );
     }
 
@@ -418,18 +428,18 @@ class _GarageScreenState extends State<GarageScreen> {
     final totalOdo = _currentOdometer;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF080B11),
+      backgroundColor: _slot.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Row(
-          children: const [
-            Icon(Icons.two_wheeler, color: Color(0xFF00E5FF), size: 22),
+          children: [
+            Icon(Icons.two_wheeler, color: _slot.accent, size: 22),
             SizedBox(width: 8),
             Text(
               'GARASI & PERAWATAN',
               style: TextStyle(
-                color: Colors.white,
+                color: _slot.text,
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.5,
@@ -439,7 +449,7 @@ class _GarageScreenState extends State<GarageScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.swap_horiz, color: Color(0xFF00E5FF)),
+            icon: Icon(Icons.swap_horiz, color: _slot.accent),
             tooltip: 'Ganti Kendaraan',
             onPressed: () => VehiclePickerSheet.show(context, widget.sensorHub),
           ),
@@ -452,9 +462,9 @@ class _GarageScreenState extends State<GarageScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0C1017),
+              color: _slot.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: _slot.dim(0.08)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,8 +477,8 @@ class _GarageScreenState extends State<GarageScreen> {
                       children: [
                         Text(
                           activeVeh.name.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: _slot.text,
                             fontSize: 14,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 1.0,
@@ -477,31 +487,31 @@ class _GarageScreenState extends State<GarageScreen> {
                         const SizedBox(height: 2),
                         Text(
                           '${activeVeh.plateNumber.isNotEmpty ? '${activeVeh.plateNumber} • ' : ''}${activeVeh.engineCc.toStringAsFixed(0)}cc • Tangki ${activeVeh.tankCapacityL}L',
-                          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+                          style: TextStyle(color: _slot.dim(0.4), fontSize: 11),
                         ),
                       ],
                     ),
                     TextButton.icon(
                       style: TextButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.06),
+                        backgroundColor: _slot.dim(0.06),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: _editOdometerDialog,
-                      icon: const Icon(Icons.edit, size: 12, color: Color(0xFF00E5FF)),
-                      label: const Text('Edit Odo', style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11)),
+                      icon: Icon(Icons.edit, size: 12, color: _slot.accent),
+                      label: Text('Edit Odo', style: TextStyle(color: _slot.accent, fontSize: 11)),
                     ),
                   ],
                 ),
-                const Divider(color: Colors.white10, height: 20),
+                Divider(color: _slot.border(0.1), height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    const Text(
+                    Text(
                       'TOTAL ODOMETER',
-                      style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: _slot.dim(0.54), fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -509,17 +519,17 @@ class _GarageScreenState extends State<GarageScreen> {
                       children: [
                         Text(
                           totalOdo.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: _slot.text,
                             fontSize: 26,
                             fontWeight: FontWeight.w900,
                             fontFamily: 'monospace',
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Text(
+                        Text(
                           'KM',
-                          style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: _slot.accent, fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -537,10 +547,10 @@ class _GarageScreenState extends State<GarageScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00FF66).withOpacity(0.12),
-                    foregroundColor: const Color(0xFF00FF66),
+                    backgroundColor: _slot.positive.withOpacity(0.12),
+                    foregroundColor: _slot.positive,
                     elevation: 0,
-                    side: const BorderSide(color: Color(0xFF00FF66), width: 1),
+                    side: BorderSide(color: _slot.positive, width: 1),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
@@ -553,10 +563,10 @@ class _GarageScreenState extends State<GarageScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E5FF).withOpacity(0.12),
-                    foregroundColor: const Color(0xFF00E5FF),
+                    backgroundColor: _slot.accent.withOpacity(0.12),
+                    foregroundColor: _slot.accent,
                     elevation: 0,
-                    side: const BorderSide(color: Color(0xFF00E5FF), width: 1),
+                    side: BorderSide(color: _slot.accent, width: 1),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
@@ -589,16 +599,16 @@ class _GarageScreenState extends State<GarageScreen> {
               return Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0C1017),
+                  color: _slot.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  border: Border.all(color: _slot.dim(0.08)),
                 ),
                 child: Column(
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.payments_outlined,
-                            color: Color(0xFF00E5FF), size: 18),
+                        Icon(Icons.payments_outlined,
+                            color: _slot.accent, size: 18),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -607,14 +617,14 @@ class _GarageScreenState extends State<GarageScreen> {
                               Text(
                                 'Total tercatat',
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.45),
+                                  color: _slot.dim(0.45),
                                   fontSize: 11,
                                 ),
                               ),
                               Text(
                                 'Rp ${_formatIdr(ledger.totalIdr)}',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: _slot.text,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
                                   fontFamily: 'monospace',
@@ -629,7 +639,7 @@ class _GarageScreenState extends State<GarageScreen> {
                             Text(
                               'Bulan ini',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.45),
+                                color: _slot.dim(0.45),
                                 fontSize: 10,
                               ),
                             ),
@@ -637,8 +647,8 @@ class _GarageScreenState extends State<GarageScreen> {
                               months.isEmpty
                                   ? 'Rp 0'
                                   : 'Rp ${_formatIdr(months.first.total)}',
-                              style: const TextStyle(
-                                color: Color(0xFF00FF66),
+                              style: TextStyle(
+                                color: _slot.positive,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
                                 fontFamily: 'monospace',
@@ -654,14 +664,14 @@ class _GarageScreenState extends State<GarageScreen> {
                     // reads as "this bike is free to run".
                     if (perKm != null) ...[
                       const SizedBox(height: 12),
-                      Divider(color: Colors.white10, height: 1),
+                      Divider(color: _slot.border(0.1), height: 1),
                       const SizedBox(height: 10),
                       Row(
                         children: [
                           Text(
                             'Rp ${_formatIdr(perKm)} / km',
-                            style: const TextStyle(
-                              color: Color(0xFFFFB300),
+                            style: TextStyle(
+                              color: _slot.warning,
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'monospace',
@@ -671,7 +681,7 @@ class _GarageScreenState extends State<GarageScreen> {
                           Text(
                             '${ledger.entries.length} catatan',
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.35),
+                                color: _slot.dim(0.35),
                                 fontSize: 10),
                           ),
                         ],
@@ -683,11 +693,11 @@ class _GarageScreenState extends State<GarageScreen> {
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
-                              const Color(0xFF00E5FF).withOpacity(0.12),
-                          foregroundColor: const Color(0xFF00E5FF),
+                              _slot.accent.withOpacity(0.12),
+                          foregroundColor: _slot.accent,
                           elevation: 0,
-                          side: const BorderSide(
-                              color: Color(0xFF00E5FF), width: 1),
+                          side: BorderSide(
+                              color: _slot.accent, width: 1),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
@@ -727,9 +737,9 @@ class _GarageScreenState extends State<GarageScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0C1017),
+                    color: _slot.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    border: Border.all(color: _slot.dim(0.08)),
                   ),
                   child: Row(
                     children: [
@@ -738,8 +748,8 @@ class _GarageScreenState extends State<GarageScreen> {
                             ? Icons.contact_phone_outlined
                             : Icons.contact_phone,
                         color: contact.isEmpty
-                            ? Colors.white30
-                            : const Color(0xFF00E5FF),
+                            ? _slot.dim(0.3)
+                            : _slot.accent,
                         size: 18,
                       ),
                       const SizedBox(width: 12),
@@ -747,10 +757,10 @@ class _GarageScreenState extends State<GarageScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Kontak Darurat',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: _slot.text,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -762,16 +772,16 @@ class _GarageScreenState extends State<GarageScreen> {
                                   : contact,
                               style: TextStyle(
                                 color: contact.isEmpty
-                                    ? Colors.amber
-                                    : Colors.white38,
+                                    ? _slot.warning
+                                    : _slot.dim(0.38),
                                 fontSize: 11,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right,
-                          color: Colors.white30, size: 20),
+                      Icon(Icons.chevron_right,
+                          color: _slot.dim(0.3), size: 20),
                     ],
                   ),
                 ),
@@ -793,23 +803,23 @@ class _GarageScreenState extends State<GarageScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0C1017),
+                    color: _slot.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    border: Border.all(color: _slot.dim(0.08)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.notifications_active,
-                          color: Color(0xFF00E5FF), size: 18),
+                      Icon(Icons.notifications_active,
+                          color: _slot.accent, size: 18),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Atur Ambang Peringatan',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: _slot.text,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -817,14 +827,14 @@ class _GarageScreenState extends State<GarageScreen> {
                             const SizedBox(height: 2),
                             Text(
                               '$enabledCount dari ${RuleService().rules.length} aturan aktif',
-                              style: const TextStyle(
-                                  color: Colors.white38, fontSize: 11),
+                              style: TextStyle(
+                                  color: _slot.dim(0.38), fontSize: 11),
                             ),
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right,
-                          color: Colors.white30, size: 20),
+                      Icon(Icons.chevron_right,
+                          color: _slot.dim(0.3), size: 20),
                     ],
                   ),
                 ),
@@ -840,9 +850,9 @@ class _GarageScreenState extends State<GarageScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFF0C1017),
+              color: _slot.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: _slot.dim(0.08)),
             ),
             child: Column(
               children: [
@@ -872,17 +882,17 @@ class _GarageScreenState extends State<GarageScreen> {
                   height: 38,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isObdConnected ? const Color(0xFF00E5FF).withOpacity(0.15) : Colors.white.withOpacity(0.04),
-                      foregroundColor: isObdConnected ? const Color(0xFF00E5FF) : Colors.white38,
+                      backgroundColor: isObdConnected ? _slot.accent.withOpacity(0.15) : _slot.dim(0.04),
+                      foregroundColor: isObdConnected ? _slot.accent : _slot.dim(0.38),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
-                        side: BorderSide(color: isObdConnected ? const Color(0xFF00E5FF) : Colors.white10),
+                        side: BorderSide(color: isObdConnected ? _slot.accent : _slot.border(0.1)),
                       ),
                     ),
                     onPressed: _isTesting ? null : _runPreFlightScan,
                     icon: _isTesting
-                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _slot.text))
                         : Icon(isObdConnected ? Icons.refresh : Icons.lock_outline, size: 16),
                     label: Text(
                       _isTesting ? 'MEMERIKSA ECU...' : (isObdConnected ? 'JALANKAN SCAN PRE-RIDE' : 'HUBUNGKAN DONGLE UNTUK SCAN'),
@@ -915,10 +925,10 @@ class _GarageScreenState extends State<GarageScreen> {
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0C1017),
+                color: _slot.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isOverdue ? Colors.redAccent.withOpacity(0.4) : Colors.white.withOpacity(0.06),
+                  color: isOverdue ? _slot.danger.withOpacity(0.4) : _slot.dim(0.06),
                   width: 1,
                 ),
               ),
@@ -931,19 +941,19 @@ class _GarageScreenState extends State<GarageScreen> {
                       Expanded(
                         child: Text(
                           item['name'] as String,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          style: TextStyle(color: _slot.text, fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: (isOverdue ? Colors.redAccent : color).withOpacity(0.15),
+                          color: (isOverdue ? _slot.danger : color).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           isOverdue ? 'LEWAT ${remainingKm.abs()} KM' : '$remainingKm KM LAGI',
                           style: TextStyle(
-                            color: isOverdue ? Colors.redAccent : color,
+                            color: isOverdue ? _slot.danger : color,
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
                           ),
@@ -956,8 +966,8 @@ class _GarageScreenState extends State<GarageScreen> {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: progress,
-                      backgroundColor: Colors.white.withOpacity(0.06),
-                      valueColor: AlwaysStoppedAnimation<Color>(isOverdue ? Colors.redAccent : color),
+                      backgroundColor: _slot.dim(0.06),
+                      valueColor: AlwaysStoppedAnimation<Color>(isOverdue ? _slot.danger : color),
                       minHeight: 4,
                     ),
                   ),
@@ -967,7 +977,7 @@ class _GarageScreenState extends State<GarageScreen> {
                     children: [
                       Text(
                         '${kmSinceService.toStringAsFixed(0)} / $limitKm KM',
-                        style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10),
+                        style: TextStyle(color: _slot.dim(0.4), fontSize: 10),
                       ),
                       InkWell(
                         onTap: () => _recordServiceDialog(item),
@@ -1041,11 +1051,11 @@ class _GarageScreenState extends State<GarageScreen> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        title: const Text(
+        backgroundColor: _slot.elevated,
+        title: Text(
           'KONTAK DARURAT',
           style: TextStyle(
-            color: Colors.white,
+            color: _slot.text,
             fontSize: 14,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.2,
@@ -1055,34 +1065,34 @@ class _GarageScreenState extends State<GarageScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Nomor ini hanya dipakai untuk menyiippetkan SMS '
               'setelah deteksi kecelakaan. Aplikasi tidak pernah mengirim '
               'otomatis - Anda tetap menekan tombol kirim.',
-              style: TextStyle(color: Colors.white54, fontSize: 11),
+              style: TextStyle(color: _slot.dim(0.54), fontSize: 11),
             ),
             const SizedBox(height: 14),
             TextField(
               controller: controller,
               keyboardType: TextInputType.phone,
               autofocus: true,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: _slot.text,
                 fontFamily: 'monospace',
                 fontSize: 16,
               ),
               decoration: InputDecoration(
                 hintText: '08123456789',
-                hintStyle: const TextStyle(color: Colors.white24),
+                hintStyle: TextStyle(color: _slot.border(0.24)),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
+                fillColor: _slot.dim(0.05),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white12),
+                  borderSide: BorderSide(color: _slot.border(0.12)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white12),
+                  borderSide: BorderSide(color: _slot.border(0.12)),
                 ),
               ),
             ),
@@ -1091,13 +1101,13 @@ class _GarageScreenState extends State<GarageScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Batal',
-                style: TextStyle(color: Colors.white54)),
+            child: Text('Batal',
+                style: TextStyle(color: _slot.dim(0.54))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Simpan',
-                style: TextStyle(color: Color(0xFF00E5FF))),
+            child: Text('Simpan',
+                style: TextStyle(color: _slot.accent)),
           ),
         ],
       ),
@@ -1125,12 +1135,12 @@ class _GarageScreenState extends State<GarageScreen> {
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: const Color(0xFF00E5FF)),
+        Icon(icon, size: 14, color: _slot.accent),
         const SizedBox(width: 6),
         Text(
           title,
-          style: const TextStyle(
-            color: Colors.white70,
+          style: TextStyle(
+            color: _slot.dim(0.7),
             fontSize: 11,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.0,
@@ -1151,18 +1161,18 @@ class _GarageScreenState extends State<GarageScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          Text(label, style: TextStyle(color: _slot.dim(0.7), fontSize: 12)),
           Row(
             children: [
               Text(
                 value,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'monospace'),
+                style: TextStyle(color: _slot.text, fontWeight: FontWeight.bold, fontSize: 12, fontFamily: 'monospace'),
               ),
               const SizedBox(width: 8),
               Text(
                 status,
                 style: TextStyle(
-                  color: isOk ? const Color(0xFF00FF66) : Colors.orangeAccent,
+                  color: isOk ? _slot.positive : _slot.warning,
                   fontWeight: FontWeight.bold,
                   fontSize: 10,
                 ),
@@ -1185,15 +1195,15 @@ class _GarageScreenState extends State<GarageScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0C1017),
+        color: _slot.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: _slot.dim(0.06)),
       ),
       child: Row(
         children: [
           Icon(
             isLocked ? Icons.lock_outline : (isDestructive ? Icons.delete_forever : Icons.play_arrow),
-            color: isLocked ? Colors.white24 : (isDestructive ? Colors.redAccent : const Color(0xFF00E5FF)),
+            color: isLocked ? _slot.border(0.24) : (isDestructive ? _slot.danger : _slot.accent),
             size: 20,
           ),
           const SizedBox(width: 12),
@@ -1204,21 +1214,21 @@ class _GarageScreenState extends State<GarageScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    color: isLocked ? Colors.white54 : Colors.white,
+                    color: isLocked ? _slot.dim(0.54) : _slot.text,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
                 ),
                 Text(
                   desc,
-                  style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 10),
+                  style: TextStyle(color: _slot.dim(0.35), fontSize: 10),
                 ),
               ],
             ),
           ),
           TextButton(
             style: TextButton.styleFrom(
-              backgroundColor: isLocked ? Colors.white.withOpacity(0.02) : const Color(0xFF00E5FF).withOpacity(0.1),
+              backgroundColor: isLocked ? _slot.dim(0.02) : _slot.accent.withOpacity(0.1),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               minimumSize: const Size(50, 26),
             ),
@@ -1226,7 +1236,7 @@ class _GarageScreenState extends State<GarageScreen> {
             child: Text(
               isLocked ? 'LOCKED' : 'TEST',
               style: TextStyle(
-                color: isLocked ? Colors.white24 : const Color(0xFF00E5FF),
+                color: isLocked ? _slot.border(0.24) : _slot.accent,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
@@ -1238,6 +1248,6 @@ class _GarageScreenState extends State<GarageScreen> {
   }
 
   Widget _buildSubDivider() {
-    return Divider(color: Colors.white.withOpacity(0.04), height: 12);
+    return Divider(color: _slot.dim(0.04), height: 12);
   }
 }

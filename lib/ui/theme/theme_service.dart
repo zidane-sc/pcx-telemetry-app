@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,16 +14,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// disappears at a red-light stop.
 enum ThemeSlot {
   noir('Noir', Color(0xFF080B11), Color(0xFF0C1017), Color(0xFF00E5FF),
-      Colors.white, Color(0xFF00FF66), Color(0xFFFFB300)),
+      Colors.white, Color(0xFF00FF66), Color(0xFFFFB300), Color(0xFF0F172A),
+      Color(0xFFFF5252), Colors.black),
 
   sunGlare('Terik', Color(0xFFF1F5F9), Color(0xFFE2E8F0), Color(0xFF006064),
-      Colors.black, Color(0xFF00695C), Color(0xFFE65100)),
+      Colors.black, Color(0xFF00695C), Color(0xFFB53A0A), Color(0xFFFFFFFF),
+      Color(0xFFC62828), Colors.white),
 
   amoled('AMOLED', Color(0xFF000000), Color(0xFF000000), Color(0xFF00E5FF),
-      Colors.white, Color(0xFF00E5FF), Color(0xFFFF6D00)),
+      Colors.white, Color(0xFF00E5FF), Color(0xFFFF6D00), Color(0xFF0A0A0A),
+      Color(0xFFFF5252), Colors.black),
 
   redline('Redline', Color(0xFF0A0507), Color(0xFF140A0D), Color(0xFFFF3B30),
-      Colors.white, Color(0xFFFF5252), Color(0xFFFFB300));
+      Colors.white, Color(0xFFFF5252), Color(0xFFFFB300), Color(0xFF1A0A0C),
+      Color(0xFFFF5252), Colors.black);
 
   const ThemeSlot(
     this.label,
@@ -34,6 +37,9 @@ enum ThemeSlot {
     this.text,
     this.positive,
     this.warning,
+    this.elevated,
+    this.danger,
+    this.onAccent,
   );
 
   final String label;
@@ -44,7 +50,29 @@ enum ThemeSlot {
   final Color positive;
   final Color warning;
 
+  /// Modal and sheet background. Distinct from [surface] because a raised panel
+  /// has to separate from the screen it covers, and in Terik mode that means
+  /// white-on-white needs a shadow rather than a grey-on-grey lift.
+  final Color elevated;
+
+  /// Destructive and fault states. `Colors.redAccent` is a pale pink on white,
+  /// so light mode needs a genuinely darker red rather than the same token.
+  final Color danger;
+
+  /// Foreground drawn on top of [accent], [positive] or [danger] fills. Dark
+  /// accents take near-black; Terik's teal takes white.
+  final Color onAccent;
+
   bool get isLight => background.computeLuminance() > 0.5;
+
+  /// Dimmed text. Every `Colors.white.withOpacity(x)` collapses to this, so a
+  /// themed screen has one way to say "secondary" instead of scattering raw
+  /// opacities that only work on black.
+  Color dim([double opacity = 0.6]) => text.withOpacity(opacity);
+
+  /// Hairline borders. Hardcoded `Colors.white12` reads as a dark smudge on a
+  /// light background, so the value derives from the text colour instead.
+  Color border([double opacity = 0.12]) => text.withOpacity(opacity);
 }
 
 /// Holds the active [ThemeSlot] and persists the choice.
