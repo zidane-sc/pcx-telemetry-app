@@ -12,22 +12,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// differ in a way that matters on a handlebar: Noir's panels are lifted grey
 /// so they stay visible in shade, Amoled is true black so an unlit screen
 /// disappears at a red-light stop.
+///
+/// Redline carries a green `positive` despite the name, and that is not an
+/// oversight. A red-only palette left `positive` (#FF5252) and `accent`
+/// (#FF3B30) 1.11:1 apart -- visually the same colour -- so the cockpit's RPM
+/// channel and its TPS channel stopped being distinguishable. The slot is red
+/// because of its accent, not because every channel has to be.
 enum ThemeSlot {
   noir('Noir', Color(0xFF080B11), Color(0xFF0C1017), Color(0xFF00E5FF),
       Colors.white, Color(0xFF00FF66), Color(0xFFFFB300), Color(0xFF0F172A),
-      Color(0xFFFF5252), Colors.black),
+      Color(0xFFFF5252), Colors.black, Color(0xFFA78BFA)),
 
   sunGlare('Terik', Color(0xFFF1F5F9), Color(0xFFE2E8F0), Color(0xFF006064),
       Colors.black, Color(0xFF00695C), Color(0xFFB53A0A), Color(0xFFFFFFFF),
-      Color(0xFFC62828), Colors.white),
+      Color(0xFFC62828), Colors.white, Color(0xFF4A2A94)),
 
   amoled('AMOLED', Color(0xFF000000), Color(0xFF000000), Color(0xFF00E5FF),
-      Colors.white, Color(0xFF00E5FF), Color(0xFFFF6D00), Color(0xFF0A0A0A),
-      Color(0xFFFF5252), Colors.black),
+      Colors.white, Color(0xFF00FF66), Color(0xFFFF6D00), Color(0xFF0A0A0A),
+      Color(0xFFFF5252), Colors.black, Color(0xFFA78BFA)),
 
   redline('Redline', Color(0xFF0A0507), Color(0xFF140A0D), Color(0xFFFF3B30),
-      Colors.white, Color(0xFFFF5252), Color(0xFFFFB300), Color(0xFF1A0A0C),
-      Color(0xFFFF5252), Colors.black);
+      Colors.white, Color(0xFF00FF66), Color(0xFFFFB300), Color(0xFF1A0A0C),
+      Color(0xFFFF5252), Colors.black, Color(0xFFB39DFF));
 
   const ThemeSlot(
     this.label,
@@ -40,6 +46,7 @@ enum ThemeSlot {
     this.elevated,
     this.danger,
     this.onAccent,
+    this.timing,
   );
 
   final String label;
@@ -62,6 +69,16 @@ enum ThemeSlot {
   /// Foreground drawn on top of [accent], [positive] or [danger] fills. Dark
   /// accents take near-black; Terik's teal takes white.
   final Color onAccent;
+
+  /// Ignition timing advance. The fourth channel beside RPM, TPS and LOAD.
+  ///
+  /// Not a single value across slots: no purple reaches 4.5:1 on both black
+  /// and white, because a mid-luminance colour has to be light enough for a
+  /// dark background and dark enough for a light one. So the dark slots take a
+  /// light violet and Terik takes a deep one. The old #7C4DFF managed 3.90:1
+  /// on the light surface -- below the body-text floor on the one instrument
+  /// channel that has no warning semantics to fall back on.
+  final Color timing;
 
   bool get isLight => background.computeLuminance() > 0.5;
 

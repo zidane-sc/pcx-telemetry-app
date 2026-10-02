@@ -57,7 +57,7 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
     final bool isOverheat = hasEct && _currentFrame.ectC > 100.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E17),
+      backgroundColor: _slot.background,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -71,7 +71,7 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                   height: 180,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0A0E17),
+                    color: _slot.background,
                     border: Border.all(
                       color: isOverheat ? _slot.danger : _slot.accent.withOpacity(0.5),
                       width: 2.0,
@@ -164,7 +164,7 @@ class _MiniPipCockpitState extends State<MiniPipCockpit> {
                               color: _currentSensor.lean.confidence ==
                                       LeanConfidence.degraded
                                   ? _slot.danger
-                                  : const Color(0xFF7C4DFF),
+                                  : _slot.timing,
                             ),
                           ],
                         ),

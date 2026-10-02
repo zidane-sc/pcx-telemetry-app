@@ -95,6 +95,7 @@ class _SearchDestinationPageState extends State<SearchDestinationPage> {
 
   Future<void> _selectPlace(NavPlace place) async {
     FocusScope.of(context).unfocus();
+    final slot = ThemeScope.slotOf(context);
     setState(() => _isRouting = true);
 
     final route = await RoutingService.calculateRoute(
@@ -123,7 +124,7 @@ class _SearchDestinationPageState extends State<SearchDestinationPage> {
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF00FF66),
+        backgroundColor: slot.positive,
         content: Text(
           'Navigasi ke ${place.name} dimulai '
           '(${(route.totalDistanceMeters / 1000).toStringAsFixed(1)} KM)',
@@ -199,17 +200,17 @@ class _SearchDestinationPageState extends State<SearchDestinationPage> {
           ),
 
           if (_isRouting)
-            const Expanded(
+            Expanded(
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(
-                        color: Color(0xFF00E5FF), strokeWidth: 2.5),
-                    SizedBox(height: 14),
+                        color: slot.accent, strokeWidth: 2.5),
+                    const SizedBox(height: 14),
                     Text(
                       'Menghitung rute khusus motor...',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                      style: TextStyle(color: slot.dim(0.7), fontSize: 12),
                     ),
                   ],
                 ),
@@ -265,13 +266,13 @@ class _SearchDestinationPageState extends State<SearchDestinationPage> {
               ),
             )
           else if (_isLoading)
-            const Expanded(
+            Expanded(
               child: Center(
                 child: SizedBox(
                   width: 26,
                   height: 26,
                   child:
-                      CircularProgressIndicator(color: Color(0xFF00E5FF), strokeWidth: 2),
+                      CircularProgressIndicator(color: slot.accent, strokeWidth: 2),
                 ),
               ),
             )
@@ -374,7 +375,7 @@ class _SearchDestinationPageState extends State<SearchDestinationPage> {
           IconButton(
             icon: Icon(
               starred ? Icons.star : Icons.star_border,
-              color: starred ? const Color(0xFFFFB300) : slot.text.withOpacity(0.3),
+              color: starred ? slot.warning : slot.text.withOpacity(0.3),
               size: 20,
             ),
             tooltip: starred ? 'Hapus dari tersimpan' : 'Simpan tujuan',

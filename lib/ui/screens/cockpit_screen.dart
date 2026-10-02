@@ -44,6 +44,16 @@ class CockpitScreen extends StatefulWidget {
 }
 
 class _CockpitScreenState extends State<CockpitScreen> {
+  /// The active cockpit colour slot.
+  ///
+  /// A State has a `context`, so this can be a field-like getter and every one
+  /// of the twenty-odd build helpers below can reach it. That matters: the
+  /// telemetry ribbon drew its RPM/TPS/LOAD/TIMING labels in white at 40%,
+  /// which is near-invisible on the light Terik background while the coloured
+  /// numbers beside them stayed legible -- the labels explaining the numbers
+  /// were the part that vanished.
+  ThemeSlot get _slot => ThemeScope.slotOf(context);
+
   TelemetryFrame _currentFrame = TelemetryFrame.empty();
   SensorHubData _currentSensor = SensorHubData.empty();
   String? _connectedDeviceName;
@@ -240,18 +250,18 @@ class _CockpitScreenState extends State<CockpitScreen> {
             });
 
             return AlertDialog(
-              backgroundColor: const Color(0xFF0F172A),
+              backgroundColor: _slot.elevated,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
               title: Row(
-                children: const [
+                children: [
                   Icon(Icons.directions_bike,
-                      color: Color(0xFF00FF66), size: 26),
+                      color: _slot.positive, size: 26),
                   SizedBox(width: 10),
                   Text(
                     'GERAKAN TERDETEKSI',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: _slot.text,
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.1,
@@ -265,7 +275,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   Text(
                     'Kecepatan ${speedKmh.toStringAsFixed(0)} km/h terdeteksi.\nMemulai rekam trip dalam:',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: _slot.dim(0.7), fontSize: 13),
                   ),
                   const SizedBox(height: 16),
                   Stack(
@@ -277,15 +287,15 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         child: CircularProgressIndicator(
                           value: _countdownSeconds / 5.0,
                           strokeWidth: 4,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                              Color(0xFF00FF66)),
-                          backgroundColor: Colors.white10,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              _slot.positive),
+                          backgroundColor: _slot.border(0.1),
                         ),
                       ),
                       Text(
                         '$_countdownSeconds',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: _slot.text,
                           fontSize: 26,
                           fontWeight: FontWeight.w900,
                           fontFamily: 'monospace',
@@ -300,7 +310,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   width: double.infinity,
                   child: TextButton(
                     style: TextButton.styleFrom(
-                      backgroundColor: Colors.redAccent.withOpacity(0.12),
+                      backgroundColor: _slot.danger.withOpacity(0.12),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -317,10 +327,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
                                 'Auto-start trip dibatalkan (jeda 90 detik).')),
                       );
                     },
-                    child: const Text(
+                    child: Text(
                       'BATALKAN (BUKAN RIDING)',
                       style: TextStyle(
-                          color: Colors.redAccent,
+                          color: _slot.danger,
                           fontWeight: FontWeight.bold,
                           fontSize: 11),
                     ),
@@ -342,8 +352,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
     if (!tripMgr.isRecording) {
       tripMgr.startTrip();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF00FF66),
+        SnackBar(
+          backgroundColor: _slot.positive,
           content:
               Text('Trip Recording Dimulai! Pantau GPS, Speed & Telemetri.'),
         ),
@@ -361,8 +371,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
     if (!available) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.orangeAccent,
+        SnackBar(
+          backgroundColor: _slot.warning,
           content:
               Text('Mode Picture-in-Picture (PiP) tidak didukung pada HP ini.'),
         ),
@@ -373,8 +383,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
     final success = await pipMgr.enablePip();
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.redAccent,
+        SnackBar(
+          backgroundColor: _slot.danger,
           content: Text('Gagal mengaktifkan mode PiP.'),
         ),
       );
@@ -385,16 +395,16 @@ class _CockpitScreenState extends State<CockpitScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: _slot.elevated,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
-          children: const [
-            Icon(Icons.flag, color: Color(0xFF00FF66), size: 24),
+          children: [
+            Icon(Icons.flag, color: _slot.positive, size: 24),
             SizedBox(width: 8),
             Text(
               'RINGKASAN TRIP SELESAI',
               style: TextStyle(
-                color: Colors.white,
+                color: _slot.text,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.2,
@@ -425,17 +435,17 @@ class _CockpitScreenState extends State<CockpitScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
+                color: _slot.dim(0.04),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
-                children: const [
-                  Icon(Icons.cloud_upload, color: Color(0xFF00E5FF), size: 16),
+                children: [
+                  Icon(Icons.cloud_upload, color: _slot.accent, size: 16),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Trip otomatis tersimpan & di-sync ke Cloudflare PocketBase.',
-                      style: TextStyle(color: Colors.white70, fontSize: 10),
+                      style: TextStyle(color: _slot.dim(0.7), fontSize: 10),
                     ),
                   ),
                 ],
@@ -447,7 +457,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child:
-                const Text('TUTUP', style: TextStyle(color: Color(0xFF00E5FF))),
+                Text('TUTUP', style: TextStyle(color: _slot.accent)),
           ),
         ],
       ),
@@ -461,10 +471,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: const TextStyle(color: Colors.white60, fontSize: 12)),
+              style: TextStyle(color: _slot.dim(0.6), fontSize: 12)),
           Text(value,
-              style: const TextStyle(
-                  color: Colors.white,
+              style: TextStyle(
+                  color: _slot.text,
                   fontWeight: FontWeight.bold,
                   fontSize: 13)),
         ],
@@ -485,12 +495,12 @@ class _CockpitScreenState extends State<CockpitScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: Colors.redAccent,
+            backgroundColor: _slot.danger,
             content: const Text(
                 'Izin Bluetooth ditolak. Buka Pengaturan HP untuk mengizinkan.'),
             action: SnackBarAction(
               label: 'PENGATURAN',
-              textColor: Colors.white,
+              textColor: _slot.text,
               onPressed: () => openAppSettings(),
             ),
           ),
@@ -501,8 +511,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
       if (statuses[Permission.bluetoothConnect] != PermissionStatus.granted) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.orangeAccent,
+          SnackBar(
+            backgroundColor: _slot.warning,
             content:
                 Text('Izin Bluetooth Connect dibutuhkan untuk scan perangkat.'),
           ),
@@ -517,7 +527,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
       showModalBottomSheet(
         context: context,
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: _slot.elevated,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -532,31 +542,31 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'PILIH DONGLE BLUETOOTH',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: _slot.text,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.2,
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close,
-                            color: Colors.white54, size: 20),
+                        icon: Icon(Icons.close,
+                            color: _slot.dim(0.54), size: 20),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   if (devices.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 20),
                       child: Center(
                         child: Text(
                           'Belum ada perangkat paired.\nPairing dulu dongle Kingbolen (OBDII) di Bluetooth HP (PIN: 1234).',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white60, fontSize: 13),
+                          style: TextStyle(color: _slot.dim(0.6), fontSize: 13),
                         ),
                       ),
                     )
@@ -574,35 +584,35 @@ class _CockpitScreenState extends State<CockpitScreen> {
                             leading: Icon(
                               Icons.bluetooth,
                               color: isObd
-                                  ? const Color(0xFF00FF66)
-                                  : const Color(0xFF00E5FF),
+                                  ? _slot.positive
+                                  : _slot.accent,
                             ),
                             title: Text(
                               dev.name ?? 'Unknown Device',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: _slot.text,
                                 fontWeight:
                                     isObd ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
                             subtitle: Text(
                               dev.address,
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 11),
+                              style: TextStyle(
+                                  color: _slot.dim(0.54), fontSize: 11),
                             ),
                             trailing: isObd
                                 ? Container(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF00FF66)
+                                      color: _slot.positive
                                           .withOpacity(0.2),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
-                                    child: const Text(
+                                    child: Text(
                                       'RECOMMENDED',
                                       style: TextStyle(
-                                        color: Color(0xFF00FF66),
+                                        color: _slot.positive,
                                         fontSize: 9,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -646,14 +656,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: const Color(0xFF00FF66),
+          backgroundColor: _slot.positive,
           content: Text('Terhubung ke ${device.name}! Protocol: ${activeVeh.protocol.label}'),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.redAccent,
+        SnackBar(
+          backgroundColor: _slot.danger,
           content: Text('Koneksi gagal. Pastikan kontak kendaraan posisi ON.'),
         ),
       );
@@ -663,7 +673,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
   void _showQuickMenu() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: _slot.elevated,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -674,9 +684,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.picture_in_picture_alt, color: Color(0xFF00E5FF)),
-                title: const Text('Mode Floating PiP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('Buka mini cockpit melayang di atas Google Maps/Waze', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                leading: Icon(Icons.picture_in_picture_alt, color: _slot.accent),
+                title: Text('Mode Floating PiP', style: TextStyle(color: _slot.text, fontWeight: FontWeight.bold)),
+                subtitle: Text('Buka mini cockpit melayang di atas Google Maps/Waze', style: TextStyle(color: _slot.dim(0.54), fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _enterPipMode();
@@ -685,22 +695,22 @@ class _CockpitScreenState extends State<CockpitScreen> {
               ListTile(
                 leading: Icon(
                   widget.obdService.isMockMode ? Icons.stop_circle : Icons.play_circle_outline,
-                  color: widget.obdService.isMockMode ? Colors.redAccent : const Color(0xFF00FF66),
+                  color: widget.obdService.isMockMode ? _slot.danger : _slot.positive,
                 ),
                 title: Text(
                   widget.obdService.isMockMode ? 'Hentikan Simulator' : 'Mode Simulator (Demo)',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: _slot.text, fontWeight: FontWeight.bold),
                 ),
-                subtitle: const Text('Simulasi data gas, rpm, dan bensin tanpa dongle', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                subtitle: Text('Simulasi data gas, rpm, dan bensin tanpa dongle', style: TextStyle(color: _slot.dim(0.54), fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   widget.obdService.enableMockMode(!widget.obdService.isMockMode);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.sync, color: Color(0xFF00FF66)),
-                title: const Text('Hubungkan Ulang Cloud PocketBase', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('Cek status koneksi Cloudflare Tunnel server', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                leading: Icon(Icons.sync, color: _slot.positive),
+                title: Text('Hubungkan Ulang Cloud PocketBase', style: TextStyle(color: _slot.text, fontWeight: FontWeight.bold)),
+                subtitle: Text('Cek status koneksi Cloudflare Tunnel server', style: TextStyle(color: _slot.dim(0.54), fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   widget.pbService.autoLogin();
@@ -840,8 +850,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       const SizedBox(width: 8),
                       Text(
                         speedUnit,
-                        style: const TextStyle(
-                          color: Color(0xFF00E5FF),
+                        style: TextStyle(
+                          color: _slot.accent,
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 2.0,
@@ -857,7 +867,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     decoration: BoxDecoration(
                       color: pillBgColor,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white10),
+                      border: Border.all(color: _slot.border(0.1)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -867,7 +877,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                           _currentFrame.has(ObdChannel.rpm)
                               ? _currentFrame.rpm.toStringAsFixed(0)
                               : '--',
-                          const Color(0xFF00FF66),
+                          _slot.positive,
                         ),
                         _buildSubDivider(),
                         _buildSubMetric(
@@ -875,19 +885,19 @@ class _CockpitScreenState extends State<CockpitScreen> {
                           _currentFrame.has(ObdChannel.tps)
                               ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%'
                               : '--',
-                          const Color(0xFF00E5FF),
+                          _slot.accent,
                         ),
                         _buildSubDivider(),
                         _buildSubMetric(
                           'LOAD',
                           isObdLive ? '${_currentFrame.engineLoadPercent.toStringAsFixed(0)}%' : '--',
-                          const Color(0xFFFFB300),
+                          _slot.warning,
                         ),
                         _buildSubDivider(),
                         _buildSubMetric(
                           'TIMING',
                           isObdLive ? '${_currentFrame.timingAdvanceDeg.toStringAsFixed(0)}°' : '--',
-                          const Color(0xFF7C4DFF),
+                          _slot.timing,
                         ),
                       ],
                     ),
@@ -900,13 +910,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     children: [
                       _buildPillBadge(
                         '⚡ ${dyno['hp']!.toStringAsFixed(1)} HP • ${dyno['torqueNm']!.toStringAsFixed(1)} Nm',
-                        const Color(0xFF00FF66),
+                        _slot.positive,
                         pillBgColor,
                       ),
                       const SizedBox(width: 6),
                       _buildPillBadge(
                         '${_currentSensor.slopePercent >= 0 ? '▲ +' : '▼ '}${_currentSensor.slopePercent.toStringAsFixed(1)}% SLOPE',
-                        _currentSensor.slopePercent.abs() > 6.0 ? const Color(0xFFFFB300) : Colors.white70,
+                        _currentSensor.slopePercent.abs() > 6.0 ? _slot.warning : _slot.dim(0.7),
                         pillBgColor,
                       ),
                     ],
@@ -918,16 +928,16 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.2),
+                        color: _slot.warning.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.amber, width: 1),
+                        border: Border.all(color: _slot.warning, width: 1),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.warning_amber, color: Colors.amber, size: 12),
+                        children: [
+                          Icon(Icons.warning_amber, color: _slot.warning, size: 12),
                           SizedBox(width: 4),
-                          Text('GUNCANGAN / LUBANG JALAN', style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold)),
+                          Text('GUNCANGAN / LUBANG JALAN', style: TextStyle(color: _slot.warning, fontSize: 9, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -1007,8 +1017,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
                       children: [
                         Text(
                           displaySpeed.toStringAsFixed(0),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: _slot.text,
                             fontSize: 78,
                             fontWeight: FontWeight.w900,
                             height: 0.9,
@@ -1018,8 +1028,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         ),
                         Text(
                           speedUnit,
-                          style: const TextStyle(
-                            color: Color(0xFF00E5FF),
+                          style: TextStyle(
+                            color: _slot.accent,
                             fontSize: 11,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 2.0,
@@ -1029,9 +1039,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A),
+                            color: _slot.elevated,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Colors.white10),
+                            border: Border.all(color: _slot.border(0.1)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -1041,7 +1051,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                                 _currentFrame.has(ObdChannel.rpm)
                               ? _currentFrame.rpm.toStringAsFixed(0)
                               : '--',
-                                const Color(0xFF00FF66),
+                                _slot.positive,
                               ),
                               _buildSubDivider(),
                               _buildSubMetric(
@@ -1049,13 +1059,13 @@ class _CockpitScreenState extends State<CockpitScreen> {
                                 _currentFrame.has(ObdChannel.tps)
                               ? '${_currentFrame.tpsPercent.toStringAsFixed(0)}%'
                               : '--',
-                                const Color(0xFF00E5FF),
+                                _slot.accent,
                               ),
                               _buildSubDivider(),
                               _buildSubMetric(
                                 'LOAD',
                                 isObdLive ? '${_currentFrame.engineLoadPercent.toStringAsFixed(0)}%' : '--',
-                                const Color(0xFFFFB300),
+                                _slot.warning,
                               ),
                             ],
                           ),
@@ -1072,9 +1082,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isRecording
-                          ? Colors.redAccent.withOpacity(0.9)
-                          : const Color(0xFF00FF66).withOpacity(0.9),
-                      foregroundColor: Colors.black,
+                          ? _slot.danger.withOpacity(0.9)
+                          : _slot.positive.withOpacity(0.9),
+                      foregroundColor: _slot.onAccent,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -1165,9 +1175,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0C1017),
+              color: _slot.surface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: _slot.dim(0.08)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1175,20 +1185,20 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 Icon(
                   isBike ? Icons.two_wheeler : Icons.directions_car,
                   size: 14,
-                  color: isBike ? const Color(0xFF00E5FF) : const Color(0xFF00FF66),
+                  color: isBike ? _slot.accent : _slot.positive,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   activeVeh.name.split(' ').take(2).join(' '),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: _slot.text,
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.5,
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(Icons.arrow_drop_down, color: Colors.white38, size: 14),
+                Icon(Icons.arrow_drop_down, color: _slot.dim(0.38), size: 14),
               ],
             ),
           ),
@@ -1208,15 +1218,15 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.18),
+                    color: _slot.warning.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.amber, width: 0.8),
+                    border: Border.all(color: _slot.warning, width: 0.8),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.trending_down, color: Colors.amber, size: 12),
+                      Icon(Icons.trending_down, color: _slot.warning, size: 12),
                       SizedBox(width: 4),
-                      Text('EB', style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold)),
+                      Text('EB', style: TextStyle(color: _slot.warning, fontSize: 9, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -1226,14 +1236,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.2),
+                    color: _slot.danger.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(
-                    children: const [
-                      Icon(Icons.thermostat, color: Colors.redAccent, size: 12),
+                    children: [
+                      Icon(Icons.thermostat, color: _slot.danger, size: 12),
                       SizedBox(width: 4),
-                      Text('OVERHEAT', style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                      Text('OVERHEAT', style: TextStyle(color: _slot.danger, fontSize: 9, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -1242,14 +1252,14 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.2),
+                    color: _slot.danger.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(
-                    children: const [
-                      Icon(Icons.battery_alert, color: Colors.redAccent, size: 12),
+                    children: [
+                      Icon(Icons.battery_alert, color: _slot.danger, size: 12),
                       SizedBox(width: 4),
-                      Text('LOW BATT', style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                      Text('LOW BATT', style: TextStyle(color: _slot.danger, fontSize: 9, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -1269,8 +1279,12 @@ class _CockpitScreenState extends State<CockpitScreen> {
               icon: Icon(
                 themeSlot.isLight ? Icons.wb_sunny : Icons.dark_mode_outlined,
                 color: themeSlot.isLight
-                    ? const Color(0xFFE65100)
-                    : Colors.white38,
+                    // A sun icon means "you are in the light slot", so it wears
+                    // that slot's own warning tone. Hardcoding the amber here
+                    // meant the icon drifted out of the palette the moment the
+                    // token was retuned for contrast.
+                    ? _slot.warning
+                    : _slot.dim(0.38),
                 size: 18,
               ),
               padding: EdgeInsets.zero,
@@ -1287,7 +1301,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
             IconButton(
               icon: Icon(
                 Icons.bluetooth,
-                color: isObdConnected ? const Color(0xFF00FF66) : Colors.white38,
+                color: isObdConnected ? _slot.positive : _slot.dim(0.38),
                 size: 18,
               ),
               padding: EdgeInsets.zero,
@@ -1298,7 +1312,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
             // More Options Menu
             IconButton(
-              icon: const Icon(Icons.more_vert, color: Colors.white54, size: 18),
+              icon: Icon(Icons.more_vert, color: _slot.dim(0.54), size: 18),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               tooltip: 'Menu Tambahan',
@@ -1337,21 +1351,21 @@ class _CockpitScreenState extends State<CockpitScreen> {
 
     if (perfBox.state == DragState.measuring) {
       dragText = '0-60 KM/H: ${perfBox.current0to60Sec.toStringAsFixed(2)}s';
-      dragColor = const Color(0xFFFFB300);
+      dragColor = _slot.warning;
     } else if (perfBox.state == DragState.finished) {
       dragText = '0-60: ${perfBox.lastFinishedTimeSec.toStringAsFixed(2)}s (BEST: ${perfBox.best0to60Sec.toStringAsFixed(2)}s)';
-      dragColor = const Color(0xFF00FF66);
+      dragColor = _slot.positive;
     } else {
       dragText = perfBox.best0to60Sec > 0
           ? 'BEST 0-60: ${perfBox.best0to60Sec.toStringAsFixed(2)}s'
           : '0-60 DRAG READY';
-      dragColor = Colors.white54;
+      dragColor = _slot.dim(0.54);
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
+        color: _slot.dim(0.04),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -1372,7 +1386,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
       children: [
         Text(
           '$label ',
-          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9, fontWeight: FontWeight.bold),
+          style: TextStyle(color: _slot.dim(0.4), fontSize: 9, fontWeight: FontWeight.bold),
         ),
         Text(
           value,
@@ -1387,7 +1401,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 8),
       height: 10,
       width: 1,
-      color: Colors.white12,
+      color: _slot.border(0.12),
     );
   }
 
@@ -1409,9 +1423,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0C1017),
+        color: _slot.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+        border: Border.all(color: _slot.dim(0.08), width: 1),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1419,7 +1433,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
           _buildRibbonColumn(
             label: isRecording ? 'JARAK' : 'RANGE',
             value: isRecording ? '${tripMgr.distanceKm.toStringAsFixed(1)} KM' : (isObdLive ? '${(activeVeh.tankCapacityL * 22).round()} KM' : '--'),
-            color: const Color(0xFF00FF66),
+            color: _slot.positive,
           ),
           _buildRibbonDivider(),
           _buildRibbonColumn(
@@ -1429,19 +1443,19 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     ? '${_currentFrame.instantaneousKml.toStringAsFixed(1)} km/L'
                     : '${_currentFrame.fuelFlowLh.toStringAsFixed(2)} L/h')
                 : '--',
-            color: const Color(0xFFFFB300),
+            color: _slot.warning,
           ),
           _buildRibbonDivider(),
           _buildRibbonColumn(
             label: 'COOLANT',
             value: hasEct ? '${_currentFrame.ectC.toStringAsFixed(0)}°C' : '--',
-            color: isOverheat ? Colors.redAccent : const Color(0xFF00E5FF),
+            color: isOverheat ? _slot.danger : _slot.accent,
           ),
           _buildRibbonDivider(),
           _buildRibbonColumn(
             label: 'BATTERY',
             value: isObdLive ? '${_currentFrame.batteryVoltage.toStringAsFixed(1)}V' : (tripMgr.maxSpeedKmh > 0 ? '${tripMgr.maxSpeedKmh.toStringAsFixed(0)} km/h' : '--'),
-            color: isLowBatt ? Colors.redAccent : const Color(0xFF7C4DFF),
+            color: isLowBatt ? _slot.danger : _slot.timing,
           ),
         ],
       ),
@@ -1456,7 +1470,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.4),
+            color: _slot.dim(0.4),
             fontSize: 9,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.8,
@@ -1480,7 +1494,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
     return Container(
       height: 22,
       width: 1,
-      color: Colors.white.withOpacity(0.06),
+      color: _slot.dim(0.06),
     );
   }
 
@@ -1491,9 +1505,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
           backgroundColor: isRecording
-              ? Colors.redAccent.withOpacity(0.9)
-              : const Color(0xFF00FF66).withOpacity(0.9),
-          foregroundColor: Colors.black,
+              ? _slot.danger.withOpacity(0.9)
+              : _slot.positive.withOpacity(0.9),
+          foregroundColor: _slot.onAccent,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         onPressed: _toggleTripRecording,

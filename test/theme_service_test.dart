@@ -76,6 +76,7 @@ void main() {
           'positive': s.positive,
           'warning': s.warning,
           'danger': s.danger,
+          'timing': s.timing,
         }.entries) {
           expect(
             contrastRatio(entry.value, s.surface),
@@ -98,6 +99,7 @@ void main() {
           'positive': s.positive,
           'warning': s.warning,
           'danger': s.danger,
+          'timing': s.timing,
         }.entries) {
           expect(
             contrastRatio(entry.value, s.onAccent),
@@ -130,6 +132,16 @@ void main() {
       expect(contrastRatio(ThemeSlot.sunGlare.danger, ThemeSlot.sunGlare.surface),
           greaterThanOrEqualTo(4.5),
           reason: 'the replacement has to actually work');
+    });
+
+    test('the timing channel cannot be one shared colour', () {
+      // A single purple cannot reach 4.5:1 on both black and white, so this
+      // asserts the slots actually diverge rather than sharing one value. The
+      // shared #7C4DFF managed 3.90:1 on the light surface.
+      final timings = ThemeSlot.values.map((s) => s.timing).toSet();
+      expect(timings.length, greaterThan(1),
+          reason: 'if the timing channel went back to one value it would '
+              'silently fail the light slot again');
     });
 
     test('dim and border derive from the slot text, not from white', () {

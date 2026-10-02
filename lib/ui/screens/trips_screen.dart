@@ -268,7 +268,7 @@ class _TripsScreenState extends State<TripsScreen> {
                               _buildDecelBadge(
                                 label: 'REM BRAKE',
                                 count: item.serviceBrakingCount,
-                                color: const Color(0xFFFF5252),
+                                color: _slot.danger,
                                 icon: Icons.speed,
                               ),
                             ],
@@ -608,7 +608,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
       } else if (spd < 80) {
         segColor = _slot.warning; // Fast Amber (60-80 km/h)
       } else {
-        segColor = const Color(0xFFFF3B30); // Top Speed Red (>80 km/h)
+        segColor = _slot.danger; // Top Speed Red (>80 km/h)
       }
 
       lines.add(
@@ -785,9 +785,9 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                                       point: _mapPoints[_peakSpeedIndex],
                                       width: 24,
                                       height: 24,
-                                      child: const Icon(
+                                      child: Icon(
                                         Icons.bolt,
-                                        color: Color(0xFF7C4DFF),
+                                        color: _slot.timing,
                                         size: 20,
                                       ),
                                     ),
@@ -1033,7 +1033,7 @@ class _TripPlaybackSheetState extends State<TripPlaybackSheet> {
                 ),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: _buildInspectorCard('TOP SPEED', '${widget.item.maxSpeedKmh.toStringAsFixed(0)} km/h', const Color(0xFF7C4DFF)),
+                  child: _buildInspectorCard('TOP SPEED', '${widget.item.maxSpeedKmh.toStringAsFixed(0)} km/h', _slot.timing),
                 ),
               ],
             ),

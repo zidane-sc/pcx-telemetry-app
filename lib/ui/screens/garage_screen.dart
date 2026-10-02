@@ -74,7 +74,7 @@ class _GarageScreenState extends State<GarageScreen> {
       'key': 'gear_oil',
       'name': 'Busi Laser Iridium & Oli Gardan',
       'limitKm': 8000,
-      'color': const Color(0xFF7C4DFF),
+      'color': _slot.timing,
     },
     {
       'key': 'coolant',
