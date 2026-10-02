@@ -15,6 +15,9 @@ dependencies:
   geolocator: ^12.0.0
   sensors_plus: ^6.0.0
   shared_preferences: ^2.2.3
+  # Sprint 8: PB credentials were committed to a public repo in api_constants.
+  # Android Keystore-backed storage so they are never in source again.
+  flutter_secure_storage: ^9.2.2
   google_fonts: ^6.2.0
   floating: ^6.0.0
   flutter_map: 7.0.2

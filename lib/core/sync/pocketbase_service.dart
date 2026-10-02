@@ -16,32 +16,54 @@ class PocketBaseService {
     pb = PocketBase(baseUrl ?? ApiConstants.defaultBaseUrl);
   }
 
+  /// Finds a reachable host and authenticates against it.
+  ///
+  /// Two steps that used to be one, and the split matters. [HostResolver]
+  /// answers "is anything out there", which needs no credentials. Only once a
+  /// host answers do we spend the password on it. Trying all three hosts with
+  /// the credentials — as this did before — meant a dead tunnel produced three
+  /// failed logins, and a correct password looked as broken as a wrong one.
+  ///
+  /// Returns false without throwing: a rider opening the app outside coverage
+  /// should get the phone sensors, not an error screen. The trip data stays in
+  /// local storage and syncs when a host appears.
   Future<bool> autoLogin() async {
-    final hosts = [
-      ApiConstants.defaultBaseUrl,
-      ApiConstants.lanBaseUrl,
-      ApiConstants.tailscaleBaseUrl,
-    ];
-
-    for (final host in hosts) {
-      try {
-        pb = PocketBase(host);
-        final success = await login(
-          ApiConstants.defaultUserEmail,
-          ApiConstants.defaultUserPass,
-        );
-        if (success) {
-          isConnectedNotifier.value = true;
-          debugPrint('[PBService] Successfully connected to host: $host');
-          return true;
-        }
-      } catch (e) {
-        debugPrint('[PBService] Failed connecting to $host: $e');
-      }
+    final resolved = await HostResolver.resolve();
+    if (!resolved.ok) {
+      isConnectedNotifier.value = false;
+      debugPrint('[PBService] no reachable host (${resolved.failure})');
+      return false;
     }
 
-    isConnectedNotifier.value = false;
-    return false;
+    final email = await CredentialStore().email();
+    final password = await CredentialStore().password();
+    if (email == null || password == null) {
+      isConnectedNotifier.value = false;
+      debugPrint('[PBService] no stored credentials; needs one-time setup');
+      return false;
+    }
+
+    try {
+      pb = PocketBase(resolved.host!);
+      final ok = await login(email, password);
+      if (ok) {
+        isConnectedNotifier.value = true;
+        debugPrint('[PBService] connected to ${resolved.host}');
+      } else {
+        isConnectedNotifier.value = false;
+      }
+      return ok;
+    } catch (e) {
+      debugPrint('[PBService] login failed: $e');
+      isConnectedNotifier.value = false;
+      return false;
+    }
+  }
+
+  /// One-time credential entry, used by the Garage setup prompt.
+  Future<bool> setup(String email, String password) async {
+    await CredentialStore().save(email.trim(), password);
+    return autoLogin();
   }
 
   Future<bool> login(String email, String password) async {

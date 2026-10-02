@@ -12,6 +12,7 @@ import 'core/fuel/fuel_log_manager.dart';
 import 'core/garage/expense_ledger.dart';
 import 'core/telemetry/ride_report_service.dart';
 import 'core/trip/trip_manager.dart';
+import 'ui/sync/sync_setup_dialog.dart';
 import 'ui/theme/theme_service.dart';
 import 'core/logger/app_logger.dart';
 import 'core/pip/pip_manager.dart';
@@ -19,6 +20,10 @@ import 'core/vehicle/vehicle_manager.dart';
 import 'core/telemetry/performance_box.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/overlay/mini_pip_cockpit.dart';
+
+/// Lets a background callback reach the navigator: the sync setup prompt is
+/// raised from `main` after the first frame, outside any widget's context.
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   runZonedGuarded(() async {
@@ -62,8 +67,18 @@ void main() async {
     // Sprint 4: emergency contact for the crash composer
     await RideReportService().init();
 
-    // Background auto-login to PocketBase
+    // Background auto-login. Non-blocking: the phone-sensor side of the app is
+    // fully usable with no cloud at all, so a dead tunnel must never hold up
+    // the cockpit. Trips queue in local storage and flush when a host appears.
     pbService.autoLogin();
+
+    // First run has no stored credentials -- they are no longer compiled in --
+    // so prompt once, after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final navCtx = navigatorKey.currentContext;
+      if (navCtx == null) return;
+      await ensureSyncSetup(navCtx, pbService);
+    });
 
     // Enable native Picture-in-Picture when leaving to Google Maps
     PipManager().enableAutoPipOnLeave();
@@ -113,6 +128,7 @@ class _PcxTelemetryAppState extends State<PcxTelemetryApp> {
     return MaterialApp(
       title: 'PCX Cyber Telemetry',
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF080B11),
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
