@@ -20,9 +20,8 @@ import '../../core/navigation/navigation_manager.dart';
 import '../../core/vehicle/vehicle_manager.dart';
 import '../../core/telemetry/performance_box.dart';
 import '../../core/telemetry/dyno_power_calculator.dart';
-import '../navigation/search_destination_sheet.dart';
 import '../theme/theme_service.dart';
-import '../navigation/navigation_turn_banner.dart';
+import '../navigation/nav_route_bar.dart';
 import '../navigation/cockpit_map_view.dart';
 import '../vehicle/vehicle_picker_sheet.dart';
 import '../widgets/lean_angle_gauge.dart';
@@ -790,12 +789,17 @@ class _CockpitScreenState extends State<CockpitScreen> {
           ),
           const SizedBox(height: 6),
 
-          // Turn-by-Turn Navigation Instruction Banner
-          NavigationTurnBanner(
-            navMgr: navMgr,
+          // Route Bar: search entry point when idle, turn banner when
+          // navigating. One slot, so the cockpit never has an empty gap where
+          // the navigation controls would be.
+          NavRouteBar(
+            currentPosition: LatLng(
+              _currentSensor.latitude != 0.0 ? _currentSensor.latitude : -6.2088,
+              _currentSensor.longitude != 0.0 ? _currentSensor.longitude : 106.8456,
+            ),
+            isMapVisible: _isInlineMapVisible,
             onToggleMap: () =>
                 setState(() => _isInlineMapVisible = !_isInlineMapVisible),
-            isMapVisible: _isInlineMapVisible,
           ),
 
           // If Navigating & Map Visible: Show Cockpit Live Route Map
@@ -1098,12 +1102,20 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 _buildCleanTopBar(activeVeh, isOverheat, isLowBatt),
                 const SizedBox(height: 6),
 
-                // Navigation Banner in Landscape
-                NavigationTurnBanner(
-                  navMgr: navMgr,
-                  onToggleMap: () => setState(
-                      () => _isInlineMapVisible = !_isInlineMapVisible),
+                // Route Bar in Landscape
+                NavRouteBar(
+                  currentPosition: LatLng(
+                    _currentSensor.latitude != 0.0
+                        ? _currentSensor.latitude
+                        : -6.2088,
+                    _currentSensor.longitude != 0.0
+                        ? _currentSensor.longitude
+                        : 106.8456,
+                  ),
                   isMapVisible: _isInlineMapVisible,
+                  compact: true,
+                  onToggleMap: () =>
+                      setState(() => _isInlineMapVisible = !_isInlineMapVisible),
                 ),
 
                 Expanded(
@@ -1267,23 +1279,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
               onPressed: () => ThemeScope.of(context).cycle(),
             ),
 
-            // Search POI Button
-            IconButton(
-              icon: const Icon(Icons.search, color: Color(0xFF00FF66), size: 18),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              tooltip: 'Cari Tujuan Navigasi',
-              onPressed: () {
-                SearchDestinationSheet.show(
-                  context,
-                  LatLng(
-                    _currentSensor.latitude != 0.0 ? _currentSensor.latitude : -6.2088,
-                    _currentSensor.longitude != 0.0 ? _currentSensor.longitude : 106.8456,
-                  ),
-                );
-              },
-            ),
-
+            // Search POI lives in the NavRouteBar, not here. As an 18dp glyph
+            // sharing a row with theme and Bluetooth it read as a peer of
+            // maintenance controls; it is the cockpit's most-used action.
+            //
             // Bluetooth Connector Button
             IconButton(
               icon: Icon(
@@ -1292,7 +1291,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 size: 18,
               ),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               tooltip: 'Pilih Dongle Bluetooth',
               onPressed: _showBluetoothPicker,
             ),
@@ -1301,7 +1300,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
             IconButton(
               icon: const Icon(Icons.more_vert, color: Colors.white54, size: 18),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               tooltip: 'Menu Tambahan',
               onPressed: _showQuickMenu,
             ),

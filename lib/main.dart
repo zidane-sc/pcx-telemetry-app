@@ -17,6 +17,7 @@ import 'ui/theme/theme_service.dart';
 import 'core/logger/app_logger.dart';
 import 'core/pip/pip_manager.dart';
 import 'core/vehicle/vehicle_manager.dart';
+import 'core/navigation/destination_store.dart';
 import 'core/telemetry/performance_box.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/overlay/mini_pip_cockpit.dart';
@@ -56,6 +57,10 @@ void main() async {
 
     // Sprint 7: cockpit colour slot
     await ThemeService().initialize();
+
+    // Pinned and recent destinations. Local only, so a failed read just means
+    // the rider types the name once more -- never a blocked launch.
+    await DestinationStore().initialize();
 
     // Configure lean sensor state based on active vehicle
     sensorHub.setLeanEnabled(VehicleManager().activeVehicle.hasLeanSensor);
